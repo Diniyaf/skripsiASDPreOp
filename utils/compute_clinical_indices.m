@@ -82,13 +82,12 @@ P_pa_mean = trapz(t_ss, P_pa_trace) ...
 
 HR = params.HR;    % Heart rate [bpm]
 
-% CO [L/min] = SV [mL] * HR [bpm] * conversion
-mLs_to_Lmin = uc.mLs_to_Lmin;    % [L/min per mL/s]
-CO_Lmin      = SV_lv * HR * mLs_to_Lmin;    % Cardiac output [L/min]
+% CO [L/min] = SV [mL] * HR [bpm] / 1000
+CO_Lmin      = SV_lv * HR / 1000.0;    % Cardiac output [L/min]
 
 % Systemic and pulmonary flows via stroke volumes
-Q_systemic_Lmin  = SV_lv * HR * mLs_to_Lmin;    % Qs [L/min]
-Q_pulmonary_Lmin = SV_rv * HR * mLs_to_Lmin;    % Qp [L/min]
+Q_systemic_Lmin  = SV_lv * HR / 1000.0;    % Qs [L/min]
+Q_pulmonary_Lmin = SV_rv * HR / 1000.0;    % Qp [L/min]
 
 Q_ratio = Q_pulmonary_Lmin / Q_systemic_Lmin;    % Qp/Qs [dimensionless]
 
