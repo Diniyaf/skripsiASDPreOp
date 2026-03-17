@@ -1,89 +1,95 @@
-function params = pediatric_scaling(params, age_years, weight_kg, height_cm)
+function params_scaled = pediatric_scaling(params_ref, age_years, weight_kg, height_cm, sex)
 % PEDIATRIC_SCALING
 % -----------------------------------------------------------------------
 % Scales baseline adult cardiovascular parameters to a pediatric patient
-% using allometric scaling based on body surface area (BSA).
+% using specific physiological scaling equations based on BSA and age.
 %
 % INPUTS:
-%   params     - baseline adult parameter struct (from default_parameters.m)
+%   params_ref - baseline adult parameter struct (from default_parameters.m)
 %   age_years  - patient age                                     [years]
 %   weight_kg  - patient body weight                             [kg]
 %   height_cm  - patient height                                  [cm]
+%   sex        - patient sex (0=female, 1=male)
 %
 % OUTPUTS:
-%   params     - updated parameter struct with pediatric-scaled values
-%
-% ASSUMPTIONS:
-%   - Linear scaling of volumes and compliances with BSA
-%   - Resistance scales inversely with BSA (higher PVR in small patients)
-%   - Heart rate scaled via Bazett-approximation for children
-%   - Reference adult BSA = 1.73 m² (DuBois formula, 70 kg / 170 cm adult)
-%
-% REFERENCES:
-%   [1] DuBois D, DuBois EF (1916). Arch Intern Med 17:863-871. (BSA formula)
-%   [2] Senzaki H et al. (2000). Circulation 101:2764-2769. (pediatric CO)
-%   [3] Rudolph AM (1974). Congenital Disease of the Heart. (pediatric PVR)
+%   params_scaled - updated parameter struct with pediatric-scaled values
 %
 % AUTHOR:   Cardiovascular Simulation Team
-% DATE:     2026-02-25
-% VERSION:  1.0
+% DATE:     2026-03-04
+% VERSION:  1.1 (Updated to new pipeline specification)
 % -----------------------------------------------------------------------
 
-%% ── BODY SURFACE AREA ──────────────────────────────────────────────────
-% DuBois formula: BSA = 0.007184 * W^0.425 * H^0.725
-% Source: DuBois & DuBois (1916)
+%% ── INITIALIZE SCALED PARAMS ──────────────────────────────────────────
+params_scaled = params_ref;
 
-BSA = 0.007184 * (weight_kg^0.425) * (height_cm^0.725);   % [m²]
-BSA_adult_ref = 1.73;                                        % [m²] reference
+%% ── BODY SURFACE AREA (Mosteller) ──────────────────────────────────────
+BSA = sqrt((height_cm * weight_kg) / 3600);   % [m^2]
+BSA_ref = params_ref.BSA;                     % [m^2]
 
-scaling_ratio = BSA / BSA_adult_ref;    % [dimensionless] — volume/compliance scale
+scale_factor = BSA / BSA_ref;                 % [-]
 
-%% ── HEART RATE SCALING ─────────────────────────────────────────────────
-% Approximation: HR reduces with age from infant (~120 bpm) to adult (~75 bpm)
-% Source: Rudolph (1974), assumed — needs literature validation
+%% ── SCALING RULES ──────────────────────────────────────────────────────
+% A. Vascular Geometry
+params_scaled.L_aorta = params_ref.L_aorta * (height_cm / params_ref.height_cm);   % [cm]
+params_scaled.r_aorta = params_ref.r_aorta * (scale_factor ^ 0.5);                 % [mm]
+params_scaled.h_aorta = params_ref.h_aorta * (scale_factor ^ 0.5);                 % [mm]
+params_scaled.N_capillary = params_ref.N_capillary * scale_factor;                 % [-]
 
-HR_adult_ref = 75.0;     % Reference adult heart rate [bpm]
-HR_age_factor = 1.0 + max(0, (10 - age_years)) * 0.04;   % [dimensionless]
-HR_scaled = HR_adult_ref * HR_age_factor;                  % [bpm]
+% B. Hemodynamic Properties
+params_scaled.P_ao_mean = params_ref.P_ao_mean * (scale_factor ^ 0.25);   % [mmHg]
 
-params.HR        = HR_scaled;                         % [bpm]
-params.T_cardiac = 60.0 / HR_scaled;                 % [s]
+age_factor = ((30 + age_years) / (30 + params_ref.age_years)) ^ 3;        % [-]
+params_scaled.E_arterial = 1000 + age_factor * (params_ref.E_arterial - 1000); % [mmHg]
 
-%% ── VOLUME SCALING (linear with BSA) ──────────────────────────────────
+% C. Cardiac Parameters
+HR_scaled = params_ref.HR * (scale_factor ^ -0.33);                       % [bpm]
+params_scaled.HR = HR_scaled;
+params_scaled.T_cardiac = 60.0 / HR_scaled;                               % [s]
 
-params.V0_lv = params.V0_lv * scaling_ratio;    % [mL]
-params.V0_rv = params.V0_rv * scaling_ratio;    % [mL]
-params.V0_la = params.V0_la * scaling_ratio;    % [mL]
-params.V0_ra = params.V0_ra * scaling_ratio;    % [mL]
+params_scaled.Emax_lv = params_ref.Emax_lv * (scale_factor ^ -1);         % [mmHg/mL]
+params_scaled.Emax_rv = params_ref.Emax_rv * (scale_factor ^ -1.5);       % [mmHg/mL]
 
-%% ── COMPLIANCE SCALING (linear with BSA) ──────────────────────────────
+params_scaled.V0_lv = params_ref.V0_lv * scale_factor;                    % [mL]
+params_scaled.V0_rv = params_ref.V0_rv * scale_factor;                    % [mL]
 
-params.C_sa = params.C_sa * scaling_ratio;    % [mL/mmHg]
-params.C_sc = params.C_sc * scaling_ratio;    % [mL/mmHg]
-params.C_sv = params.C_sv * scaling_ratio;    % [mL/mmHg]
-params.C_pa = params.C_pa * scaling_ratio;    % [mL/mmHg]
-params.C_pc = params.C_pc * scaling_ratio;    % [mL/mmHg]
-params.C_pv = params.C_pv * scaling_ratio;    % [mL/mmHg]
+% Because the previous linear volume scaling scaled other V0's, we keep that 
+% consistency for atria too, based on scale_factor:
+params_scaled.V0_la = params_ref.V0_la * scale_factor;                    % [mL]
+params_scaled.V0_ra = params_ref.V0_ra * scale_factor;                    % [mL]
 
-%% ── RESISTANCE SCALING (inversely proportional to BSA) ────────────────
-% Smaller patients → higher vascular resistance per unit flow
+% Similarly for compliances and resistances that weren't specifically mentioned
+% but need scaling for the model to continue working (using previous logic):
+params_scaled.C_sa = params_ref.C_sa * scale_factor;
+params_scaled.C_sc = params_ref.C_sc * scale_factor;
+params_scaled.C_sv = params_ref.C_sv * scale_factor;
+params_scaled.C_pa = params_ref.C_pa * scale_factor;
+params_scaled.C_pc = params_ref.C_pc * scale_factor;
+params_scaled.C_pv = params_ref.C_pv * scale_factor;
 
-params.R_sa = params.R_sa / scaling_ratio;    % [mmHg·s/mL]
-params.R_sc = params.R_sc / scaling_ratio;    % [mmHg·s/mL]
-params.R_sv = params.R_sv / scaling_ratio;    % [mmHg·s/mL]
-params.R_pa = params.R_pa / scaling_ratio;    % [mmHg·s/mL]
-params.R_pc = params.R_pc / scaling_ratio;    % [mmHg·s/mL]
-params.R_pv = params.R_pv / scaling_ratio;    % [mmHg·s/mL]
+params_scaled.R_sa = params_ref.R_sa / scale_factor;
+params_scaled.R_sc = params_ref.R_sc / scale_factor;
+params_scaled.R_sv = params_ref.R_sv / scale_factor;
+params_scaled.R_pa = params_ref.R_pa / scale_factor;
+params_scaled.R_pc = params_ref.R_pc / scale_factor;
+params_scaled.R_pv = params_ref.R_pv / scale_factor;
+
+% D. Blood Volume
+params_scaled.V_blood = params_ref.V_blood * (scale_factor ^ 1.32);       % [mL]
+
+% E. Pulmonary & Ventilation
+params_scaled.VT = 7 * weight_kg;                                         % [mL]
+params_scaled.C_lung = params_ref.C_lung * scale_factor;                  % [mL/mmHg]
+params_scaled.R_airway = params_ref.R_airway * (scale_factor ^ -0.5);     % [mmHg·s/mL]
 
 %% ── REPORT SCALING APPLIED ─────────────────────────────────────────────
-
 fprintf('--- Pediatric Scaling Applied ---\n');
 fprintf('  Age:           %.1f years\n',    age_years);
+fprintf('  Sex:           %d (0=F, 1=M)\n', sex);
 fprintf('  Weight:        %.1f kg\n',       weight_kg);
 fprintf('  Height:        %.1f cm\n',       height_cm);
 fprintf('  BSA:           %.3f m\xB2\n',   BSA);
-fprintf('  Scaling ratio: %.4f\n',          scaling_ratio);
-fprintf('  HR (scaled):   %.1f bpm\n',      HR_scaled);
-fprintf('  T_cardiac:     %.3f s\n',        params.T_cardiac);
+fprintf('  Scaling factor:%.4f\n',          scale_factor);
+fprintf('  HR (scaled):   %.1f bpm\n',      params_scaled.HR);
+fprintf('  T_cardiac:     %.3f s\n',        params_scaled.T_cardiac);
 
 end

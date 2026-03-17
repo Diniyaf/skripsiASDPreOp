@@ -50,8 +50,6 @@ DeltaP_sc = P_sc - P_sv;    % Systemic capillary pressure gradient  [mmHg]
 DeltaP_pc = P_pc - P_pv;    % Pulmonary capillary pressure gradient [mmHg]
 
 Q_sc = DeltaP_sc / R_sc;    % Systemic capillary flow   [mL/s]
-Q_ox = DeltaP_pc / R_pc;    % Oxygenated pulmonary cap flow [mL/s]
-Q_sh = DeltaP_pc / R_sh;    % Non-oxygenated pulmonary shunt flow [mL/s]
-Q_pc = Q_ox + Q_sh;         % Total pulmonary capillary flow [mL/s]
+Q_pc = DeltaP_pc / R_pc;    % Pulmonary capillary flow  [mL/s]
 
 end

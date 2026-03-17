@@ -141,7 +141,7 @@ plot(t_plot, P_pa_trace, 'm-', 'LineWidth',lw, 'DisplayName','Pulmonary (P_{PA})
 xlabel('Time [s]','FontSize',fs_lb,'FontName','Arial');
 ylabel('Pressure [mmHg]','FontSize',fs_lb,'FontName','Arial');
 title(sprintf('Arterial Pressures  (CO = %.2f L/min, Qp/Qs = %.3f)', ...
-    indices.CO, indices.Q_ratio),'FontSize',fs_lb,'FontName','Arial');
+    indices.CO_systemic, indices.Q_ratio),'FontSize',fs_lb,'FontName','Arial');
 legend('FontSize',fs_ax,'Location','best');
 set(gca,'FontSize',fs_ax,'FontName','Arial');
 

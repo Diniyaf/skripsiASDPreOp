@@ -60,6 +60,31 @@ idx.Q_pv = 14;   % Pulmonary venous inertial flow     [mL/s]
 params.idx    = idx;
 params.n_state = 14;   % Total number of ODE state variables [dimensionless]
 
+%% ── REFERENCE ADULT PARAMETERS (For Scaling) ───────────────────────────
+% Used as the baseline for scaling to other patient phenotypes
+params.height_cm = 170.0;    % Reference adult height               [cm]
+params.weight_kg = 70.0;     % Reference adult weight               [kg]
+params.BSA       = 1.73;     % Reference adult BSA                  [m^2]
+params.age_years = 30.0;     % Reference adult age                  [years]
+
+% Vascular baseline for scaling
+params.L_aorta     = 40.0;     % Aorta length                         [cm]
+params.r_aorta     = 12.0;     % Aorta radius                         [mm]
+params.h_aorta     = 1.5;      % Aorta wall thickness                 [mm]
+params.N_capillary = 1e9;      % Number of systemic capillaries       [-]
+
+% Hemodynamic properties for scaling
+params.P_ao_mean  = 90.0;      % Baseline mean aortic pressure        [mmHg]
+params.E_arterial = 1000.0;    % Baseline arterial elasticity         [mmHg]
+
+% Volumes for scaling
+params.V_blood    = 5000.0;    % Total blood volume                   [mL]
+
+% Pulmonary mechanics for scaling
+params.C_lung     = 200.0;     % Lung compliance                      [mL/mmHg]
+params.R_airway   = 1.5;       % Airway resistance                    [mmHg·s/mL]
+
+
 %% ── SIMULATION CONTROL ─────────────────────────────────────────────────
 
 params.T_cardiac  = 0.8;   % Cardiac cycle period [s] — HR = 75 bpm
@@ -92,11 +117,11 @@ params.V0_ra   = 3.5385;  % RA unstressed volume                [mL]
 %% ── SYSTEMIC VASCULAR PARAMETERS ──── (Parameters 13–20 of 30) ────────
 % Source: Heldt et al. (2002), Appendix A; Shi et al. (2011), Table 2
 
-params.R_sa = 0.5911;  % Systemic arterial resistance    [mmHg·s/mL]
+params.R_sa = 1.0507;  % Systemic arterial resistance    [mmHg·s/mL]
 params.R_sc = 0.0217;  % Systemic capillary resistance   [mmHg·s/mL]
-params.R_sv = 0.3596;  % Systemic venous resistance      [mmHg·s/mL]
+params.R_sv = 0.0500;  % Systemic venous resistance      [mmHg·s/mL]
 
-params.C_sa = 1.3315;  % Systemic arterial compliance    [mL/mmHg]
+params.C_sa = 1.2000;  % Systemic arterial compliance    [mL/mmHg]
 params.C_sc = 0.27981; % Systemic capillary compliance   [mL/mmHg]
 params.C_sv = 75.0;    % Systemic venous compliance      [mL/mmHg]
 
@@ -174,12 +199,12 @@ X0(idx.V_lv) = 120.0;    % LV end-diastolic volume, ~LVEDV adult [mL]
 X0(idx.V_rv) = 130.0;    % RV end-diastolic volume               [mL]
 X0(idx.V_la) =  60.0;    % LA volume at start                    [mL]
 X0(idx.V_ra) =  70.0;    % RA volume at start                    [mL]
-X0(idx.P_sa) =  80.0;    % Approximate aortic diastolic pressure [mmHg]
-X0(idx.P_sc) =  18.0;    % Systemic capillary pressure           [mmHg]
-X0(idx.P_sv) =   6.0;    % Systemic venous pressure              [mmHg]
-X0(idx.P_pa) =  12.0;    % Pulmonary artery diastolic pressure   [mmHg]
-X0(idx.P_pc) =   7.0;    % Pulmonary capillary pressure          [mmHg]
-X0(idx.P_pv) =   4.0;    % Pulmonary venous pressure             [mmHg]
+X0(idx.P_sa) = 100.0;    % Approximate aortic diastolic pressure [mmHg]
+X0(idx.P_sc) =  25.0;    % Systemic capillary pressure           [mmHg]
+X0(idx.P_sv) =  10.0;    % Systemic venous pressure              [mmHg]
+X0(idx.P_pa) =  15.0;    % Pulmonary artery diastolic pressure   [mmHg]
+X0(idx.P_pc) =   8.0;    % Pulmonary capillary pressure          [mmHg]
+X0(idx.P_pv) =   6.0;    % Pulmonary venous pressure             [mmHg]
 X0(idx.Q_sa) =  83.3;    % Systemic arterial flow  (~5 L/min)    [mL/s]
 X0(idx.Q_sv) =  83.3;    % Systemic venous flow                  [mL/s]
 X0(idx.Q_pa) =  83.3;    % Pulmonary arterial flow               [mL/s]

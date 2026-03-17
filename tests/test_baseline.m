@@ -56,8 +56,6 @@ n_failed = 0;
 fail_msgs = {};
 
 % Check 1: Aortic systolic pressure
-assert_range('P_ao_sys', indices.P_ao_sys, 100, 140, '[mmHg]', ...
-    n_passed, n_failed, fail_msgs);
 [n_passed, n_failed, fail_msgs] = update_counts( ...
     indices.P_ao_sys, 100, 140, n_passed, n_failed, fail_msgs, ...
     'P_ao_sys', '[mmHg]');
@@ -79,7 +77,7 @@ assert_range('P_ao_sys', indices.P_ao_sys, 100, 140, '[mmHg]', ...
 
 % Check 5: Cardiac output
 [n_passed, n_failed, fail_msgs] = update_counts( ...
-    indices.CO, 4.0, 8.0, n_passed, n_failed, fail_msgs, ...
+    indices.CO_systemic, 4.0, 8.0, n_passed, n_failed, fail_msgs, ...
     'CO', '[L/min]');
 
 % Check 6: Qp/Qs ratio (post-closure: should = 1.0 ± 0.05)
@@ -156,8 +154,4 @@ function [np, nf, msgs] = update_counts(val, lo, hi, np, nf, msgs, name, unit)
         msgs{end+1} = msg;    %#ok<AGROW>
         nf = nf + 1;
     end
-end
-
-function assert_range(~, ~, ~, ~, ~, ~, ~)
-% ASSERT_RANGE — placeholder called before update_counts; no-op here
 end

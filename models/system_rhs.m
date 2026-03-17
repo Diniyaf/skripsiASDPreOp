@@ -145,7 +145,7 @@ dXdt(idx.P_sv) = (Q_sc - Q_sv) / params.C_sv;              % [mmHg/s]
 dXdt(idx.P_pa) = (Q_pv_valve - Q_pa) / params.C_pa;        % [mmHg/s]
 
 % Pulmonary capillary: inflow = inertial pul. art.; outflow = pul. cap. resist.
-dXdt(idx.P_pc) = (Q_pa - Q_pc) / (params.C_pc + params.C_sh);    % [mmHg/s]
+dXdt(idx.P_pc) = (Q_pa - Q_pc) / params.C_pc;    % [mmHg/s]
 
 % Pulmonary venous: inflow = pul. cap.; outflow = inertial pul. venous
 dXdt(idx.P_pv) = (Q_pc - Q_pv) / params.C_pv;              % [mmHg/s]
