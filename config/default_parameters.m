@@ -95,33 +95,33 @@ params.n_warmup   = 40;    % Warm-up cycles before extracting results
 %% ── VENTRICULAR ELASTANCE PARAMETERS ──── (Parameters 1–6 of 28) ──────
 % Source: Valenti et al. (2023), Table 1; Heldt et al. (2002), Table A1
 
-params.Emax_lv = 2.70;    % LV peak (end-systolic) elastance    [mmHg/mL]
+params.Emax_lv = 2.769;   % LV peak elastance = E_A + E_B       [mmHg/mL]
 params.Emin_lv = 0.069;   % LV minimum (diastolic) elastance    [mmHg/mL]
 params.V0_lv   = 3.5385;  % LV unstressed volume                [mL]
 
-params.Emax_rv = 0.43;    % RV peak elastance                   [mmHg/mL]
+params.Emax_rv = 0.471264;% RV peak elastance = E_A + E_B       [mmHg/mL]
 params.Emin_rv = 0.041264;% RV minimum elastance                [mmHg/mL]
 params.V0_rv   = 8.4067;  % RV unstressed volume                [mL]
 
 %% ── ATRIAL ELASTANCE PARAMETERS ──── (Parameters 7–12 of 28) ──────────
 % Source: Shi et al. (2011), Table 1; assumed — needs validation
 
-params.Emax_la = 0.38;    % LA peak elastance                   [mmHg/mL]
+params.Emax_la = 0.65;    % LA peak elastance = E_A + E_B       [mmHg/mL]
 params.Emin_la = 0.27;    % LA minimum elastance                [mmHg/mL]
 params.V0_la   = 2.3085;  % LA unstressed volume                [mL]
 
-params.Emax_ra = 0.126;   % RA peak elastance                   [mmHg/mL]
+params.Emax_ra = 0.321;   % RA peak elastance = E_A + E_B       [mmHg/mL]
 params.Emin_ra = 0.195;   % RA minimum elastance                [mmHg/mL]
 params.V0_ra   = 3.5385;  % RA unstressed volume                [mL]
 
 %% ── SYSTEMIC VASCULAR PARAMETERS ──── (Parameters 13–20 of 30) ────────
 % Source: Heldt et al. (2002), Appendix A; Shi et al. (2011), Table 2
 
-params.R_sa = 1.0507;  % Systemic arterial resistance    [mmHg·s/mL]
+params.R_sa = 0.5911;  % Systemic arterial resistance    [mmHg*s/mL]
 params.R_sc = 0.0217;  % Systemic capillary resistance   [mmHg·s/mL]
-params.R_sv = 0.0500;  % Systemic venous resistance      [mmHg·s/mL]
+params.R_sv = 0.3596;  % Systemic venous resistance      [mmHg*s/mL]
 
-params.C_sa = 1.2000;  % Systemic arterial compliance    [mL/mmHg]
+params.C_sa = 1.3315;  % Systemic arterial compliance    [mL/mmHg]
 params.C_sc = 0.27981; % Systemic capillary compliance   [mL/mmHg]
 params.C_sv = 75.0;    % Systemic venous compliance      [mL/mmHg]
 
@@ -160,17 +160,18 @@ params.R_tv_max = 94168;      % Tricuspid valve closed resistance [mmHg·s/mL]
 params.R_pv_valve_min = 0.0062872; % Pulmonary valve open res.       [mmHg·s/mL]
 params.R_pv_valve_max = 94168;     % Pulmonary valve closed res.     [mmHg·s/mL]
 
+params.valve_smoothing_pressure = 1.0e-6; % Smoothing width for valve diode [mmHg]
+
 %% ── ASD SHUNT PARAMETER ────────────────────────────────────────────────
 % Post-closure condition: R_ASD = Inf → Q_shunt_asd = 0
 % Source: Valenti et al. (2023), Eq. (shunt)
 
-params.R_ASD = Inf;    % ASD shunt resistance [mmHg·s/mL]; Inf = closed
+params.R_ASD      = Inf;  % ASD shunt resistance [mmHg*s/mL]; Inf = closed
+params.is_post_op = true; % Scenario flag; true forces ASD closure
 
 %% ── ELASTANCE TIMING PARAMETERS ────────────────────────────────────────
 % Piecewise cosine activation model; atrial activation precedes ventricular
 % Source: Valenti et al. (2023); Heldt et al. (2002), Section 2
-
-T = params.T_cardiac;    % [s]
 
 params.t_on_lv  = 0.00;  % LV activation onset [s]
 params.T_sys_lv = 0.212; % LV systolic contraction (0.265 * 0.8) [s]
@@ -201,7 +202,7 @@ X0(idx.V_la) =  60.0;    % LA volume at start                    [mL]
 X0(idx.V_ra) =  70.0;    % RA volume at start                    [mL]
 X0(idx.P_sa) = 100.0;    % Approximate aortic diastolic pressure [mmHg]
 X0(idx.P_sc) =  25.0;    % Systemic capillary pressure           [mmHg]
-X0(idx.P_sv) =  10.0;    % Systemic venous pressure              [mmHg]
+X0(idx.P_sv) =  37.0;    % Systemic venous stressed pressure for Valenti R_sv [mmHg]
 X0(idx.P_pa) =  15.0;    % Pulmonary artery diastolic pressure   [mmHg]
 X0(idx.P_pc) =   8.0;    % Pulmonary capillary pressure          [mmHg]
 X0(idx.P_pv) =   6.0;    % Pulmonary venous pressure             [mmHg]

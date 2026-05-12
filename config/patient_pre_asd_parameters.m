@@ -180,7 +180,8 @@ params.Emin_ra = 0.12;    % [mmHg/mL]  RA diastolic elastance (RA dilated -> sof
 % This corresponds physically to a large ASD (secundum, ≥15 mm ostium).
 % R_ASD = 1.0 modelled only a small defect (Q_shunt ~ 3 mL/s → Qp/Qs ~1.04).
 % (2026-03-21 FIX: 1.0 → 0.10 to achieve haemodynamically significant shunt)
-params.R_ASD = 0.10;    % [mmHg·s/mL]  large-defect ASD; PLACEHOLDER — calibrate in Step 2
+params.R_ASD      = 0.10;  % [mmHg*s/mL] large-defect ASD; placeholder for calibration
+params.is_post_op = false; % Pre-op scenario: ASD shunt is open
 
 %% ══════════════════════════════════════════════════════════════════════
 %% SECTION 5 — INITIAL CONDITIONS

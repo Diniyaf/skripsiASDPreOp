@@ -75,7 +75,8 @@ params.Emin_ra = 0.22;
 % maintain physically consistent resistance/compliance time constants.
 
 %% -- 5. ASD SHUNT -- POST-CLOSURE ---------------------------------------
-params.R_ASD = 1e9;          % [mmHg.s/mL]  Effectively infinite (closed)
+params.R_ASD      = 1e9;  % [mmHg.s/mL] effectively infinite resistance
+params.is_post_op = true; % Post-op scenario: ASD closure forces zero shunt
 
 %% -- 6. INITIAL CONDITIONS ----------------------------------------------
 % Start near expected steady state to reduce warm-up time.

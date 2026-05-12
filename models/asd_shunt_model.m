@@ -36,7 +36,12 @@ function Q_shunt_asd = asd_shunt_model(P_la, P_ra, params)
 % VERSION:  1.0
 % -----------------------------------------------------------------------
 
-R_ASD = params.R_ASD;    % ASD shunt resistance [mmHg·s/mL]; Inf = closed
+if isfield(params, 'is_post_op') && params.is_post_op
+    Q_shunt_asd = 0;     % Post-closure toggle: no shunt flow [mL/s]
+    return;
+end
+
+R_ASD = params.R_ASD;    % ASD shunt resistance [mmHg*s/mL]; Inf = closed
 
 if isinf(R_ASD)
     Q_shunt_asd = 0;     % Post-closure: no shunt flow [mL/s]

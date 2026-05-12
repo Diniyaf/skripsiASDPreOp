@@ -104,9 +104,10 @@ P_sa_tr   = X_ss(idx.P_sa, :);  P_sc_tr = X_ss(idx.P_sc, :);
 P_sv_tr   = X_ss(idx.P_sv, :);  P_pa_tr = X_ss(idx.P_pa, :);
 P_pc_tr   = X_ss(idx.P_pc, :);  P_pv_tr = X_ss(idx.P_pv, :);
 
+C_pc_eq   = params.C_pc + params.C_sh;    % Pulmonary capillary equivalent compliance [mL/mmHg]
 V_vasc    = params.C_sa * P_sa_tr + params.C_sc * P_sc_tr + ...
             params.C_sv * P_sv_tr + params.C_pa * P_pa_tr + ...
-            params.C_pc * P_pc_tr + params.C_pv * P_pv_tr;    % [mL]
+            C_pc_eq * P_pc_tr + params.C_pv * P_pv_tr;    % [mL]
 
 V_blood_total = V_total + V_vasc;                             % [mL]
 mass_drift    = max(V_blood_total) - min(V_blood_total);      % [mL]

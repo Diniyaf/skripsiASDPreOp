@@ -24,7 +24,7 @@ function dXdt = system_rhs(t, X, params)
 %   Chambers:      dV/dt = Q_in - Q_out
 %   Vascular:      C * dP/dt = Q_in - Q_out
 %   Inertial flow: L * dQ/dt = DeltaP - R*Q
-%   Valve flow:    Q = max(0,DeltaP)/R_min + min(0,DeltaP)/R_max
+%   Valve flow:    Q = smooth_positive(DeltaP)/R_min, Q >= 0
 %   ASD shunt:     Q_shunt_asd = (P_la - P_ra) / R_ASD
 %
 % INPUTS:
@@ -91,17 +91,22 @@ P_ra = E_ra * (V_ra - params.V0_ra);    % RA pressure [mmHg]
 %% ── 3. VALVE FLOWS ──────────────────────────────────────────────────────
 
 % Mitral valve (LA → LV): open when P_la > P_lv
-Q_mv = valve_model(P_la, P_lv, params.R_mv_min, params.R_mv_max);    % [mL/s]
+valve_smoothing_pressure = params.valve_smoothing_pressure;    % [mmHg]
+Q_mv = valve_model(P_la, P_lv, params.R_mv_min, params.R_mv_max, ...
+    valve_smoothing_pressure);    % [mL/s]
 
 % Aortic valve (LV → systemic arterial): open when P_lv > P_sa
-Q_ao = valve_model(P_lv, P_sa, params.R_ao_min, params.R_ao_max);    % [mL/s]
+Q_ao = valve_model(P_lv, P_sa, params.R_ao_min, params.R_ao_max, ...
+    valve_smoothing_pressure);    % [mL/s]
 
 % Tricuspid valve (RA → RV): open when P_ra > P_rv
-Q_tv = valve_model(P_ra, P_rv, params.R_tv_min, params.R_tv_max);    % [mL/s]
+Q_tv = valve_model(P_ra, P_rv, params.R_tv_min, params.R_tv_max, ...
+    valve_smoothing_pressure);    % [mL/s]
 
 % Pulmonary valve (RV → pulmonary arterial): open when P_rv > P_pa
 Q_pv_valve = valve_model(P_rv, P_pa, ...
-    params.R_pv_valve_min, params.R_pv_valve_max);                    % [mL/s]
+    params.R_pv_valve_min, params.R_pv_valve_max, ...
+    valve_smoothing_pressure);                                        % [mL/s]
 
 %% ── 4. ASD SHUNT FLOW ──────────────────────────────────────────────────
 % Post-closure: R_ASD = Inf → Q_shunt_asd = 0
@@ -110,7 +115,7 @@ Q_shunt_asd = asd_shunt_model(P_la, P_ra, params);    % [mL/s]
 
 %% ── 5. ALGEBRAIC CAPILLARY FLOWS ───────────────────────────────────────
 
-[Q_sc, Q_pc] = vascular_model(P_sc, P_sv, P_pc, P_pv, params);
+[Q_sc, Q_pc, ~, C_pc_eq] = vascular_model(P_sc, P_sv, P_pc, P_pv, params);
 % Q_sc — systemic capillary flow  [mL/s]
 % Q_pc — pulmonary capillary flow [mL/s]
 
@@ -145,7 +150,7 @@ dXdt(idx.P_sv) = (Q_sc - Q_sv) / params.C_sv;              % [mmHg/s]
 dXdt(idx.P_pa) = (Q_pv_valve - Q_pa) / params.C_pa;        % [mmHg/s]
 
 % Pulmonary capillary: inflow = inertial pul. art.; outflow = pul. cap. resist.
-dXdt(idx.P_pc) = (Q_pa - Q_pc) / params.C_pc;    % [mmHg/s]
+dXdt(idx.P_pc) = (Q_pa - Q_pc) / C_pc_eq;        % [mmHg/s]
 
 % Pulmonary venous: inflow = pul. cap.; outflow = inertial pul. venous
 dXdt(idx.P_pv) = (Q_pc - Q_pv) / params.C_pv;              % [mmHg/s]
