@@ -1,0 +1,6 @@
+run_id,timestamp,scenario,stage,note_type,note_text,reference,details_json
+adult_baseline_validation_Valenti_Adult_ASD_Pre_Op_20260521_055753,2026-05-21 05:57:53,Valenti Adult ASD Pre-Op,adult_baseline_validation,method,Pulmonary capillary branch uses R_eq=(R_pc*R_sh)/(R_pc+R_sh) and C_eq=C_pc+C_sh.,,
+adult_baseline_validation_Valenti_Adult_ASD_Pre_Op_20260521_055753,2026-05-21 05:57:53,Valenti Adult ASD Pre-Op,adult_baseline_validation,method,Valve model uses non-regurgitant square-root smoothed diode flow.,,
+adult_baseline_validation_Valenti_Adult_ASD_Pre_Op_20260521_055753,2026-05-21 05:57:53,Valenti Adult ASD Pre-Op,adult_baseline_validation,method,ASD sign convention is positive for left-to-right LA-to-RA shunt.,,
+adult_baseline_validation_Valenti_Adult_ASD_Pre_Op_20260521_055753,2026-05-21 05:57:53,Valenti Adult ASD Pre-Op,adult_baseline_validation,method,Valenti Table 4.4 model-output RMSE percentage = 4.66%.,,
+adult_baseline_validation_Valenti_Adult_ASD_Pre_Op_20260521_055753,2026-05-21 05:57:53,Valenti Adult ASD Pre-Op,adult_baseline_validation,method,Valenti Table 4.4 clinical-value RMSE percentage = 12.60%.,,

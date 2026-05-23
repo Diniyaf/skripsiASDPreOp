@@ -1,0 +1,11 @@
+run_id,timestamp,scenario,variable_name,value,unit,description,source,details_json
+ped_healthy_8yo_20260521_2106,2026-05-21 21:06:15,Healthy_Pediatric_8yo,age_years,8,years,Dummy age,patient_dummy_pediatric_asd,
+ped_healthy_8yo_20260521_2106,2026-05-21 21:06:15,Healthy_Pediatric_8yo,height_cm,137,cm,Dummy height,patient_dummy_pediatric_asd,
+ped_healthy_8yo_20260521_2106,2026-05-21 21:06:15,Healthy_Pediatric_8yo,weight_kg,32,kg,Dummy weight,patient_dummy_pediatric_asd,
+ped_healthy_8yo_20260521_2106,2026-05-21 21:06:15,Healthy_Pediatric_8yo,BSA,1.10352969048312,m^2,Mosteller body surface area,computed,
+ped_healthy_8yo_20260521_2106,2026-05-21 21:06:15,Healthy_Pediatric_8yo,HR_target,83,bpm,Older-child resting HR normal range; dummy target is 83 bpm.,AHA older-child range,
+ped_healthy_8yo_20260521_2106,2026-05-21 21:06:15,Healthy_Pediatric_8yo,SAP_target,102,mmHg,8-year-old systolic BP literature-compatible range.,NHLBI/AAP pediatric BP table,
+ped_healthy_8yo_20260521_2106,2026-05-21 21:06:15,Healthy_Pediatric_8yo,DAP_target,67,mmHg,8-year-old diastolic BP literature-compatible range.,NHLBI/AAP pediatric BP table,
+ped_healthy_8yo_20260521_2106,2026-05-21 21:06:15,Healthy_Pediatric_8yo,QpQs_target,1,-,No shunt: pulmonary and systemic flow should match.,closed-loop no-shunt physiology,
+ped_healthy_8yo_20260521_2106,2026-05-21 21:06:15,Healthy_Pediatric_8yo,CO_target,4,L/min,Approximate pediatric CO; interpreted with BSA-normalized CI.,cardiac-index interpreted,
+ped_healthy_8yo_20260521_2106,2026-05-21 21:06:15,Healthy_Pediatric_8yo,PAP_mean_target,15,mmHg,Normal mean pulmonary artery pressure.,normal hemodynamic table,

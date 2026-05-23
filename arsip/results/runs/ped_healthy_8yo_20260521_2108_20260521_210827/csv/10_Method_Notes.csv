@@ -1,0 +1,6 @@
+run_id,timestamp,scenario,stage,note_type,note_text,reference,details_json
+ped_healthy_8yo_20260521_2108,2026-05-21 21:08:27,Healthy_Pediatric_8yo,healthy_validation,method,"Healthy pediatric validation uses the same 8-year-old dummy demographics as the ASD profile.",,
+ped_healthy_8yo_20260521_2108,2026-05-21 21:08:27,Healthy_Pediatric_8yo,healthy_validation,method,"ASD is forced completely closed before integration: is_post_op=true, R_ASD=Inf, params.R.asd=Inf.",,
+ped_healthy_8yo_20260521_2108,2026-05-21 21:08:27,Healthy_Pediatric_8yo,healthy_validation,method,"No GSA, Sobol/PCE, optimization, or calibration is executed in this script.",,
+ped_healthy_8yo_20260521_2108,2026-05-21 21:08:27,Healthy_Pediatric_8yo,healthy_validation,method,"Qp/Qs=1.0 is expected because closed-loop pulmonary and systemic flows are equal when no shunt is present.",,
+ped_healthy_8yo_20260521_2108,2026-05-21 21:08:27,Healthy_Pediatric_8yo,healthy_validation,method,"CO is interpreted with cardiac index because pediatric cardiac output is body-size dependent.",,

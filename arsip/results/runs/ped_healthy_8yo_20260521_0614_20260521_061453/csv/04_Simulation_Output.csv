@@ -1,0 +1,13 @@
+run_id,timestamp,scenario,metric_name,value,unit,description,source,details_json
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,QpQs,1.00000017735663,-,Pulmonary-to-systemic flow ratio,compute_clinical_indices,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,HR,83,bpm,Heart rate,params,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,SAP_sys,111.653237121689,mmHg,Systemic arterial systolic pressure,compute_clinical_indices,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,SAP_dia,73.7558797914371,mmHg,Systemic arterial diastolic pressure,compute_clinical_indices,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,SAP_mean,92.2674949730948,mmHg,Systemic arterial mean pressure,compute_clinical_indices,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,CO_systemic,3.59700854920825,L/min,Systemic cardiac output,compute_clinical_indices,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,cardiac_index,3.25954850171135,L/min/m^2,BSA-normalized systemic cardiac output,computed,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,PAP_mean,15.744703970657,mmHg,Mean pulmonary artery pressure,compute_clinical_indices,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,Q_ASD_Lmin,0,L/min,Mean ASD shunt flow,compute_clinical_indices,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,ASD_direction,closed_or_zero,-,Mean ASD shunt direction,compute_clinical_indices,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,EF_lv,0.599880454982972,fraction,Left ventricular ejection fraction,compute_clinical_indices,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,EF_rv,0.604716465663911,fraction,Right ventricular ejection fraction,compute_clinical_indices,

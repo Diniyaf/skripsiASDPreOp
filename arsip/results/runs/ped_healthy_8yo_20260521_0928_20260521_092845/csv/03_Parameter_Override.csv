@@ -1,0 +1,8 @@
+run_id,timestamp,scenario,parameter_name,baseline_value,override_value,unit,percent_change,description,source,details_json
+ped_healthy_8yo_20260521_0928,2026-05-21 09:28:45,Healthy_Pediatric_8yo,is_post_op,0,1,-,NaN,Force healthy closed-ASD physiology,main_pediatric_healthy_baseline,
+ped_healthy_8yo_20260521_0928,2026-05-21 09:28:45,Healthy_Pediatric_8yo,R_ASD,Inf,Inf,mmHg*s/mL,NaN,Close ASD shunt branch,main_pediatric_healthy_baseline,
+ped_healthy_8yo_20260521_0928,2026-05-21 09:28:45,Healthy_Pediatric_8yo,params.R.asd,Inf,Inf,mmHg*s/mL,NaN,Nested resistance mirror for closure,main_pediatric_healthy_baseline,
+ped_healthy_8yo_20260521_0928,2026-05-21 09:28:45,Healthy_Pediatric_8yo,params.asd.area_mm2,0,0,mm^2,NaN,Remove ASD area for healthy baseline,main_pediatric_healthy_baseline,
+ped_healthy_8yo_20260521_0928,2026-05-21 09:28:45,Healthy_Pediatric_8yo,P_SVEN_seed_mmHg,NaN,38,mmHg,NaN,Healthy preload operating-point seed,main_pediatric_healthy_baseline,
+ped_healthy_8yo_20260521_0928,2026-05-21 09:28:45,Healthy_Pediatric_8yo,pulmonary_resistance_scale,NaN,0.5,-,NaN,Healthy pulmonary pressure operating-point seed,main_pediatric_healthy_baseline,
+ped_healthy_8yo_20260521_0928,2026-05-21 09:28:45,Healthy_Pediatric_8yo,systemic_arterial_compliance_scale,NaN,1.5,-,NaN,Pediatric pulse-pressure operating-point seed,main_pediatric_healthy_baseline,

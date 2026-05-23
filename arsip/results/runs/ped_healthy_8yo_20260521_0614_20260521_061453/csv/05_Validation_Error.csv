@@ -1,0 +1,9 @@
+run_id,timestamp,scenario,metric_name,target_value,simulated_value,error_absolute,error_percent,unit,description,source,details_json
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,QpQs,1,1.00000017735663,1.77356625385983e-07,1.77356625385983e-05,-,No shunt: pulmonary and systemic flow should match.,pediatric healthy validation target,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,HR,83,83,0,0,bpm,Older-child resting HR normal range; dummy target is 83 bpm.,pediatric healthy validation target,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,SAP_sys,102,111.653237121689,9.65323712168873,9.46395796243993,mmHg,8-year-old systolic BP literature-compatible range.,pediatric healthy validation target,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,SAP_dia,67,73.7558797914371,6.75587979143712,10.0834026737868,mmHg,8-year-old diastolic BP literature-compatible range.,pediatric healthy validation target,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,CO_systemic,4,3.59700854920825,-0.402991450791748,-10.0747862697937,L/min,Approximate pediatric CO; interpreted with BSA-normalized CI.,pediatric healthy validation target,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,cardiac_index,3.62473255998106,3.25954850171135,-0.365184058269714,-10.0747862697937,L/min/m^2,Normal cardiac index range.,pediatric healthy validation target,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,PAP_mean,15,15.744703970657,0.744703970656978,4.96469313771319,mmHg,Normal mean pulmonary artery pressure.,pediatric healthy validation target,
+ped_healthy_8yo_20260521_0614,2026-05-21 06:14:53,Healthy_Pediatric_8yo,Q_ASD,0,0,0,NaN,L/min,No residual ASD flow when closure is forced.,pediatric healthy validation target,

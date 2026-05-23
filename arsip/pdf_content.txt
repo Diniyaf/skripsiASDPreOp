@@ -1,0 +1,4393 @@
+Lumped-parameter models for the
+simulation of cardiovascular con-
+genital diseases
+Tesi di Laurea Magistrale in
+Aeronautical Engineering - Ingegneria Aeronautica
+Author: Giulio Valenti
+Student ID: 976842
+Advisor: Prof. Luca Dedè
+Co-advisors: Andrea Tonini; Paolo Ferrero, MD; Prof. Alfio Quarteroni
+Academic Year: 2022-23
+i
+Abstract
+The objective of this study is to investigate some congenital heart defects by modeling
+them through a 0D lumped-parameters model. The starting reference model corresponds
+to a healthy adult male. The considered defects are the patent foramen ovale, partial
+anomalous pulmonary venous return, atrial septal defect and ventricular septal defect.
+The foramen is implemented by using a valve model based on the Bernoulli formula.
+The resulting model is tested for various foramen radius to quantify the different impact
+it has on the cardiac circulation. The model predicts a decrease in the ratio between
+pulmonary and systemic flow for increasing defect size. To model partial anomalous pul-
+monary venous return, the pulmonary venous compartment is first divided into the four
+main pulmonary veins. Subsequently, these veins are detached from the left atrium and
+connected, in one case, to the atrium and, in the other case, to the superior vena cava. In
+both cases, the number of anomalous veins is progressively increased from zero to three.
+The model predicts an increased impact on cardiac circulation for an increasing number
+of anomalous veins. Furthermore, by comparing the two cases, the model predicts a lower
+impact in the superior vena cava, resulting in a reduced amount of already oxygenated
+blood erroneously returning to the pulmonary circulation. Finally, the two septal defects
+are modeled as resistances connecting the respective cardiac chambers. A model cali-
+bration involving septal defects is performed for three different clinical data sets. The
+calibration shows how various parameters representing the physical characteristics of the
+cardiocirculatory system are changed due to the alteration in blood circulation patterns
+over the years. In particular, an increase in pulmonary resistances and a decrease in the
+arterial pulmonary capacitance is observed in two patients with ventricular septal defect.
+Keywords: Heart congenital defects, Lumped-parameter model, Patent foramen ovale,
+Partial anomalous pulmonary venous return, Atrial septal defect, Ventricular septal defect
+Abstract in lingua italiana
+L’obiettivo di questa trattazione è quello di studiare alcuni difetti congeniti del cuore, in-
+serendili in un modello 0D a parametri-concentrati. Il modello di riferimento di partenza
+corrisponde ad un uomo adulto sano. I difetti considerati sono il forame ovale pervio, il
+ritorno venoso anomalo polmonare parziale, il difetto di setto interatriale e il difetto di
+setto interventricolare. Il forame viene implementato utilizzando un modello di valvola
+basato sulla formula di Bernoulli. Il modello risultante viene provato per diversi valori
+di raggio del forame per quantificare il diverso impatto che questo può comportare sulla
+circolazione cardiaca. I risultati mostrano una diminuzione del rapporto tra il flusso pol-
+monare e il flusso sistemico incrementando le dimensioni del difetto. Per modelizzare il
+ritorno venoso anomalo polmonare parziale viene prima diviso il compartimento venoso
+polmonare nelle quattro principali vene polmonari. Successivamente queste vengono stac-
+cate dall’atrio sinsitro e collegate in un caso nell’atrio e nell’altro alla vena superiore cava.
+Per entrambi questi casi si aumenta progressivamente il numero di vene anomale da zero
+a tre. Per entrambi i casi di collegamento anomalo, a fronte di un aumento nel numero di
+vene anomale il modello prevede un incremento dell’impatto sulla circolazione cardiaca.
+Inoltre, confrontando i due casi, il modello prevede un minore impatto per collegamento
+alla vena superiore vena cava, quindi una ridotta quantità di sangue già ossigenato che
+erroneamente ritorna nella circolazione polmonare. Infine i due difetti di setto vengono
+modellati come due resistenze che collegano le rispettive camere cardiache.
+Una cali-
+brazione del modello comprendente i difetti di setto è eseguita per tre diversi set di dati
+clinici. La calibrazione mostra come diversi parametri, rappresentanti le caratteristiche
+fisiche del sistema cardiocircolatorio, siano cambiate a causa dell’alterazione nella circo-
+lazione sanguigna a cui questo sistema è sottoposto nel corso degli anni.
+In particolare si nota un aumento delle resistenze polmonari e una diminuzione della
+capacità dell’arteria polmonare in due pazienti che presentano il difetto di setto interven-
+tricolare.
+Parole chiave: Difetti congeniti cuore, Modello parametri-concentrati, Forame ovale
+pervio, Ritorno venoso anomalo polmonare parziale, Difetto setto interatriale, Difetto
+setto interventricolare
+v
+Contents
+Abstract
+i
+Abstract in lingua italiana
+iii
+Contents
+v
+Introduction
+1
+1
+Anatomy and physiology
+3
+1.1
+Heart . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+3
+1.2
+Patent foramen ovale . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+9
+1.3
+Partial anomalous pulmonary venous return . . . . . . . . . . . . . . . . .
+11
+1.4
+Atrial septal defect . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+13
+1.5
+Ventricular septal defect . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+14
+2
+Mathematical Models and Numerical Methods
+17
+2.1
+Lumped-parameter mathematical model
+. . . . . . . . . . . . . . . . . . .
+17
+2.2
+Dormand-Prince method . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+26
+2.3
+Backward differentiation formula
+. . . . . . . . . . . . . . . . . . . . . . .
+30
+2.4
+L-BFGS-B . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+32
+2.5
+Sobol’ indices . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+35
+3
+Modelling of congenital diseases
+39
+3.1
+PFO implementation: Bernoulli valve model . . . . . . . . . . . . . . . . .
+39
+3.2
+PAPVR modelling: pulmonary venous compartment split . . . . . . . . . .
+45
+3.3
+ASD/VSD: model calibration
+. . . . . . . . . . . . . . . . . . . . . . . . .
+49
+4
+Numerical simulations
+53
+4.1
+Patent foramen ovale results . . . . . . . . . . . . . . . . . . . . . . . . . .
+53
+4.2
+PAPVR: atrium case results . . . . . . . . . . . . . . . . . . . . . . . . . .
+55
+4.3
+PAPVR: superior vena cava case results
+. . . . . . . . . . . . . . . . . . .
+57
+4.4
+ASD patient . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+59
+4.5
+VSD patient . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+64
+4.6
+VSD patient: VD administration (VSD/VD) . . . . . . . . . . . . . . . . .
+69
+4.7
+ASD/VSD patient
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+74
+5
+Conclusions and future developments
+81
+Bibliography
+83
+List of Figures
+87
+List of Tables
+91
+Acknowledgements
+93
+1
+Introduction
+Congenital heart defects represent a category that includes numerous diseases that vary
+widely from each other. Even when considering a single specific disease within this cat-
+egory, its impact on the body can vary significantly.
+The human body is extremely
+complex, no individual is equal to anyone else in the world and there are a multitude of
+factors that influence the body structure and development. The body adapt in response
+to abnormal factors and tries to cope with it by restructuring itself, thus increasing the
+absolute uniqueness of every patient.
+Tools that give doctors a clearer picture of the patient-specific situation and that can
+glimpse/predict how the body will respond to a medication treatment/surgery can greatly
+support the decisions making and final outcome for the patient. In this study a few con-
+genital heart defects, namely the atrial and ventricular septal defects, the patent foramen
+ovale and the partial anomalous pulmonary venous return have been studied.
+Starting from how they generally impact the body anatomy and physiology, we look for
+ways to model and implemented them in a 0D lumped-parameter model. The goal is to
+modify the base lumped-parameter model for a normal healthy male adult, introducing
+one at a time the studied congenital defects and observing whether the resulting model
+exhibits behaviors consistent with those of patients carrying that specific defect.
+For all the considered defects we started from a 0D lumped-parameters model inspired by
+[1–3].
+Studying the patent foramen ovale we used a Bernoulli valve model [4, 5] to simulate
+the foramen. This customized model correctly predicts a shunt phenomenon increase for
+larger foramen radius. In addition, it estimates a considerably small impact on the car-
+diocirculatory system.
+For the modeling of the partial anomalous pulmonary venous return we start by first split-
+ting the pulmonary venous system of the healthy reference model. Then, we reshape the
+lumped-parameter model by severing the resulting pulmonary veins from the left atrium
+and connecting them to the right atrium or its tributaries. We simulate two types of
+this disease, the first one in which the anomalous veins drain in the right atrium and the
+second one in which the anomalous pulmonary veins drain in the superior vena cava.
+2
+| Introduction
+Superior vena cava lumped-parameters has been taken from [6, 7].
+We increase the number of pulmonary veins from one to three in both types, the model
+correctly predict an increased impact on the cardiac circulation for more anomalous veins.
+The model also correctly predict a lower impact for the superior vena cava case with re-
+spect to the atrium case, in according with the pathological history of this disease.
+Lastly, we introduce the ventricular and septal defects in the model as two resistances
+connecting the respective heart chambers as in [8–11].
+Subsequently, we perform a model calibration on the resulting lumped-parameter model
+for three different septa defects patients, whom clinical data are provided by Dott. Paolo
+Ferrero (IRCCS Policlinico San Donato Hospital, Italy).
+The first patient present an atrial septal defect, the second one is affected by a ventricular
+septal defect and its clinical data is measured in normal conditions and under vasodilata-
+tors administration. Finally the third one presents both septal defects.
+The calibrated models successfully predicts almost all the available clinical data, the rel-
+ative mean squared errors computed on these quantities are considerably small.
+Different considerations and inquiring on the patients clinical conditions are made. In
+particular, in the two patients affected by the ventricular septal defect, the resulting
+pulmonary resistances are particularly high and the pulmonary arterial capacitance is
+significantly small.
+3
+1| Anatomy and physiology
+In this first chapter we review the anatomy and physiology of the heart and its congenital
+defects considered in this study.
+1.1.
+Heart
+The heart is an organ located between the lungs which function is to pump blood through-
+out the body. It contains four muscle chambers, atria and ventricles, stimulated by elec-
+trical impulses.
+Their contraction phase is called systole, the relaxation that follows
+dyastole. Right atrium and ventricle are usually collectively referred to as the right heart.
+In the same fashion their left counterparts are called left heart.
+Left and right atria are positioned on the upper side of the heart and receive blood from
+the pulmonary and systemic veins, respectively. As the atria contract, the blood flows
+into the respective ventricle where it is pumped to the arteries.
+(a)
+(b)
+Figure 1.1: Cardiac anatomy: (a) a sketch of its eletrical network system (picture elaborated from [12]);
+(b) a sketch of the heart internal structure along with its main components (picture elaborated from [13]).
+All abbreviations are defined in table 1.1
+4
+1| Anatomy and physiology
+Table 1.1: List of abbreviations.
+Cardiac anatomy
+RBB
+Right Bundle Branch
+AO
+Aorta
+RV
+Right Ventricle
+AV
+Aortic Valve
+SAN
+SinoAtrialNode
+AVN
+AtrioVentricular Node
+SupVC
+Superior Vena Cava
+BB
+Bachmann’s Bundle
+TV
+Tricuspid Valve
+HB
+His Bundle
+InfVC
+Inferior Vena Cava
+Cardiac cycle
+LA
+Left Atrium
+AC
+Atrial Contraction
+LV
+Left Ventricle
+EDV
+End Diastolic Volume
+MV
+Mitral Valve
+ESV
+End Systolic Volume
+PF
+Pericardial Fluid
+IVC
+IsoVolumetric Contraction
+PT
+Pulmonary Trunk
+IVR
+IsoVolumetric Relaxation
+PV
+Pulmonary Valve
+SV
+Stroke Volume
+PVs
+Pulmonary Veins
+VE
+Ventricular Ejection
+RA
+Right Atrium
+VPF
+Ventricular Passive Filling
+Atria and ventricles contraction is regolated by the electrical conduction system sketched
+in Figure 1.1 (a). The electrical stimulation arises in the SinoAtrial Node (SAN), a special
+cardiac muscle region in the upper back wall of the Right Atrium (RA) near the Superior
+Vena Cava (SVC), from there the signal is immediately directed to the Left Atrium (LA)
+through different inter-atrial links like the Bachmann’s Bundle (BB) to ensure an almost
+simultaneous atrial contraction.
+Electrical transmission is also present from the SinoAtrial Node to the Atrio Ventricular
+Node (AVN) where it is holded till the end of the atrial contraction. Then, the impulse
+reaches the His Bundle (HB) and it splits between the Left Bundle Branch (LBB) and
+the Right Bundle Branch (RBB) to stimulate both ventricles.
+Atria and ventricles are separated by a high density fibrous section called the Cardiac
+Skeleton (CK), it acts as an insulator between the upper and lower chamber to ensure
+that atrial and ventricular contractions happen in two distinct timeframes.
+Into the fibrous rings of the Cardiac Skeleton there are 4 cardiac valves made of strong
+fibrous tissue that regulate the blood movement. The valves have thin but strong flaps
+called leaflets or cusps that can open when subjected to a pressure gradient or close to
+prevent backflow. Together with the other components depicted into the Figure 1.1 (b)
+1| Anatomy and physiology
+5
+they facilitate the cyclic circulation of blood throughout the body.
+The blood circulating in the body returns to the right atrium through the Inferior and
+Superior Vena Cava (InfVC, SupVC). Subsequently to the opening of the Tricuspid Valve
+(TV) the blood flows from the right atrium to the right ventricle.
+When the ventricular contraction starts, the blood pressure in the right ventricle rise.
+This pressure increase opens the pulmonary valve (PV) and push the blood into the Pul-
+monary Trunk (PT). From there, the blood is carried through the pulmonary arteries to
+the lungs.
+The flow that passes through the lungs, known as pulmonary circulation, undergoes an
+exchange in the capillaries surrounding the alveoli. Oxygen from the inhaled air diffuses
+through the thin capillary walls into the blood, while carbon dioxide from the blood dif-
+fuses into the alveoli to be exhaled. Subsequently, through the pulmonary veins (PVs), it
+returns to the left atrium (LA).
+The oxygen replenished blood descends from the left atrium to the left ventricle (LV)
+through the Mitral Valve (MT) and then pumped into the Aorta (AO) through the Aor-
+tic Valve (AV).
+From the aorta, the blood branches out into extensive vascular networks, coursing through
+the entire body where its oxygen content is utilized. This portion of the cardiovascular
+system that is responsible for delivering oxygenated blood from the heart to the body’s
+tissues and returning deoxygenated blood back to the heart is called systemic circulation.
+Finally the systemic circulation venous system returns the blood to the right atrium,
+closing the loop.
+The cyclic nature of the blood circulation needs the precise and controlled pumping and
+relaxation of the heart’s four chambers. Initially, during the IsoVolumetric Relaxation
+(IVR) phase, the ventricular muscles relax following the contraction phase of the previous
+heartbeat. While all valves are closed, the ventricular volume is constant and the pres-
+sure decreases rapidly. When atrial pressures match the ventricular ones the opening of
+the atrioventricular valves (TV and MV) is triggered. This marks the beginning of the
+Ventricular Passive Filling (VPF) phase.
+Subsequently, atrial systole starts, stimulated by the SinoAtrial Node. Atrial contraction
+(AC) propels additional blood towards the ventricles, giving them added preload, also
+known as ‘atrial kick’.
+6
+1| Anatomy and physiology
+Figure 1.2: Cardiac cycle phases: on the top, a sketch of the blood flow direction, the valve status and
+the contraction of the 4 chambers (darker in color) throughout the different phases (pictures elaborated
+from [14]); on the bottom, the ventricular pressure-volume loops and the valves status legenda.
+As said before the Atrio Ventricular Node regulates the electrical signal, allowing ven-
+tricular contraction only after the end of the atrial one. Upon ventricular contraction,
+pressure rises quickly, matching atrial pressure and closing the atrioventricular valves.
+Subsequently, ventricles contract, but all the cardiac valves are closed, therefore the vol-
+ume is constant. This phase is called IsoVolumetric Contraction (IVC). Ventricles pres-
+sures quickly rise and exceed the respective arterial ones, causing the semilunar valves
+(PV and AV) opening and consequently the blood discharge through the arterias, namely
+the Ventricular Ejection (VE) phase (Figure 1.2).
+During ventricular ejection, the volumes of the lower chambers diminish, consequently
+bringing the cardiac skeleton and the atrioventricular plane downward. Simultaneously,
+the atria fill, passively dilating in response to this downward motion. The atria filling
+capabilities are, in fact, highly related to the ventricles’ distensibility.
+Pressure-volume loops are historically used to visualize (and measure) the work done by
+a system. The typical pressure-volume loop of the ventricles is reported in the Figure 1.2
+on the bottom, its squared configuration directly reflects the status of the valves and the
+two isovolumetric phases described above. As pointed out in the pressure-volume diagram
+the difference between the ventricular End Diastolic Volume (EDV) and End Systolic Vol-
+ume (ESV) is the blood volume pumped out from each ventricle during a heartbeat, this
+quantity is called Stroke Volume (SV).
+In this study, several congenital heart defects are introduced. These anomalies disrupt
+normal circulation, leading to abnormal blood flow. Such irregular movements, arising
+from an anatomical irregularity in the patient, are referred to as blood shunts.
+1| Anatomy and physiology
+7
+Atria are separated by a wall called interatrial septum. Ventricles in the same fashion
+are divided by the interventricular septum; this partitioning is key to ensure the correct
+blood circulation.
+The anatomy of these two septa is briefly reported to give a better foundation on the
+congenital defects discussed later on.
+Interatrial septum starts to form on the first weeks of fetal development, when a strip
+of tissue called septum primum begins to grow downward from the upper ceiling of the
+atria (Figure 1.3.A). Initially this strip doesn’t fill all the space between the two chambers
+(Figure 1.3.B), leaving an orifice called ostium primum (i.e. first opening). Septum pri-
+mum continues to descend towards the endocardial cushions (part of the atrioventricular
+plane) but before reaching it, the tissue reopens in its uppers part forming another gap
+(Figure 1.3.C) called ostium secundum (i.e. second opening).
+Subsequently, a second tissue called septum secundum begins to grow adjacent to the
+septum primum, covering the ostium secundum and leaving a small opening called the
+foramen ovale (Figure 1.3.D). This opening, that should close by itself the first year of
+life (Figure 1.3.E), often persists into adulthood, this condition is called patent foramen
+ovale (Figure 1.3.F) and will be discussed in the next section.
+Figure 1.3: Interatrial septal development (A-E) and PFO condition (F), image taken from [15].
+8
+1| Anatomy and physiology
+The interventricular septum, on the other hand, is a triangular wall of cardiac tissue
+composed by a muscular portion and a membranous portion (Figure 1.4). The muscular
+portion is the predominant one, it is thick and located in the lower part, near the apex
+of the heart.
+It can be further subdivided into three components: the inlet septum,
+trabecular septum, and infundibular septum.
+The membranous part, however, is located near the base of the heart, or in other words,
+in the upper part of the interventricular septum.
+Figure 1.4: Interventricular septum anatomy (image taken from [16]).
+1| Anatomy and physiology
+9
+1.2.
+Patent foramen ovale
+Patent foramen ovale (PFO) is the most common congenital heart anomaly of fetal ori-
+gin, present in one-quarter of the entire adult population.
+The foramen ovale is a small flap-like opening in the fetus inter-atrial wall necessary to
+direct blood flow directly from the right to the left atrium, bypassing the pulmonary cir-
+culation. Indeed, lungs will not work till birth . The nutrients and the oxygen needed for
+the fetus development are provided by the mom’s blood through the placenta.
+Once the pulmonary circulation increases after birth, left atrium expands and its pressure
+increases because of the additional oxygenated blood flow received from the lungs. This
+increase in the left atrium pressure pushes the overhanging part of the septum primum
+against the septum secundum stimulating the fusion.
+Often the fusion is incomplete, as a result the orifice is not sealed and the septum primum
+is still free to partially hang.
+Given its shape it can only open into the left atrium when the pressure in the right atrium
+exceeds the left one, otherwise the septum primum would just press into the septum se-
+cundum closing the opening. The blood shunt, which is then mainly right to left, can be
+sometimes inverse due to ventricular dilatation. The foramen tissues are stretched me-
+chanically by the dilatation, making the foramen orifice open. Now that the hole allows
+fluid leakage, in presence of adverse pressure gradient the blood moves from the left atrium
+to the right one resulting in a right to left shunt; this phenomenon is called regurgitation.
+Any condition that can make the right atrium pressure exceed the left one opens the fora-
+men allowing blood leakage. Some examples of these conditions are pulmonary diseases
+such as pulmonary hypertension [17] or chronic obstructive pulmonary disease [18], use
+of positive end-expiratory pressure [19], pulmonary embolism after stroke [17], congestive
+heart failure [20] , onset of stroke after a Valsalva maneuver [21] and pulmonary stenosis
+[20].
+Association between PFO and cryptogenic stroke, a condition characterized by strokes
+of unknown origin, has been demonstrated in young adults. (<55 years) [22].
+PFO has also been described as one of the main facilitator for Paradoxical Embolism
+(PDE) [23]. The embolus generates in the systemic circulation, generally in the lower
+body, and travels back to the right heart. Normally it should be filtered by the lungs,
+but, in presence of a intra-cardiac shunt, it bypass the pulmonary circulation (Figure 1.5)
+and gets pushed from the right ventricle into the systemic circulation, causing arterial
+occlusion.
+10
+1| Anatomy and physiology
+Figure 1.5: Paradoxical embolus passage through a patent foramen ovale (image elaborated from [24]).
+1| Anatomy and physiology
+11
+1.3.
+Partial anomalous pulmonary venous return
+Partial anomalous pulmonary venous return (PAPVR) is an uncommon congenital defect
+in which some, but not all, of the pulmonary veins are partially or completely connected
+to the right atrium or one of its venous tributaries.
+The pulmonary veins originate from individual alveoli within the lungs as capillary ves-
+sels, from there after a complex merging network they combine into 4 main pulmonary
+veins, 2 from each lung, that normally discharge into the the left atrium.
+The most frequent connection spots other than the right atrium are superior/inferior vena
+cava (Figure 1.6), innominate veins, brachiocephalic veins and azygos vein.
+The pulmonary wedge pressure, from where the pulmonary veins arise, is usually higher
+than the right atrium (and its tributaries) one. Oxygenated blood is thus moved to the
+right heart and pumped again into the pulmonary circulation, the shunt is left to right.
+PAPVR is highly variable depending on the number of anomalous veins, the type of con-
+nection (partial or complete drain) and the discharge site. By moving upwards through
+the systemic venous system the pressure is naturally higher. It results that the further
+from the right atrium is the attachment site the lower will be the pressure gradient be-
+tween the lungs and the attachment spot itself, resulting in a shunt amount decrease.
+(a)
+(b)
+Figure 1.6: Anomalous pulmonary vein example: (a) RUPV normally drains into the left atrium ; (b)
+RUPV completely drains into SVC. (picture elaborated from [25]). Legend defined in table 1.2.
+12
+1| Anatomy and physiology
+Table 1.2: Venous system legend
+SVC
+Superior Vena Cava
+RUPV
+Right Upper Pulmonary Vein
+RLPV
+Right lower Pulmonary Vein
+LUPV
+Left Upper Pulmonary Vein
+LLPV
+Left Lower Pulmonary Vein
+There is a classification of the anomalous pulmonary venous return according to the
+site of abnormal connection, Figure 1.7. For the sake of simplicity, in this study only
+two cases of supradiaphragmatic connections will be covered: the superior vena cava one
+(Figure 1.6.b) and the cardiac one (in particular directly into the right atrium).
+Figure 1.7: Partial anomalous pulmonary venous return classification (image taken from [26]).
+1| Anatomy and physiology
+13
+1.4.
+Atrial septal defect
+The atrial septal defect (ASD) is a congenital heart defect that occurs when the wall
+separating the two heart’s upper chambers (atria) fail to close, resulting in a communi-
+cating orifice (Figure 1.8).
+This hole allows an abnormal shunt, meaning an anomalous leak that shouldn’t be hap-
+pening. The defect can usually close by itself or, frequently, be found in early stages of life;
+sometimes though, it can go unnoticed leading to further problems and complications.
+Depending on the size, the ASD can cause mild shortness of breath, palpitations and
+arrhythmia, pulmonary hypertension (PH) and even right-heart failure.
+The blood, pushed by the pressure gradient between the two atria, can move through
+the hole. Usually left atrium pressure is higher leading to left-to-right shunt and conse-
+quently to right-heart, pulmonary circulation overload. The excessive amount of already
+oxygenated blood (coming from the left atrium) gets re-pumped into the pulmonary ar-
+teria, resulting in vessels hypertension and consequently triggering body adaptation. The
+pulmonary vessels thicken and narrow leading to an increase in the pulmonary vascular
+resistance.
+Most of the times the defect can be closed by open-heart surgery or through catheter-
+ization.
+However, severe pulmonary hypertension and increased pulmonary resistance
+can make the procedure futile and even harmful. Association between high pulmonary
+resistance and post ASD-closure surgery deaths has been found [27].
+Figure 1.8: Atrial septal defect (picture taken from [28]).
+14
+1| Anatomy and physiology
+1.5.
+Ventricular septal defect
+The ventricular septal defect (VSD) is the most common congenital cardiac anomaly in
+children and second only to tricuspid aortic valves in adults. This defect is characterized
+by a hole in the wall (septum) that divide the ventricles.
+The hole usually by itself without external help, occasionally it persists and lead to further
+problems.
+Blood flows through the hole pushed by the pressure gradient between the two ventricles.
+The harm entity depends directly on its size. The opening ranges from being really small
+to cover the entire wall separating the ventricles, in this latter case the two lower chamber
+essentially work as a one common ventricle. Thus, symptoms and complications span
+from shortness of breath (expecially when exercising), hard breathing, frequent respiratory
+infections to aortic insufficiency, delayed growth and even to heart failure.
+The shunted portion of blood is pushed by the ventricular contraction into the wrong
+circulation, either the pulmonary or the systemic one. Depending on the shunt direction
+one of two circulation gets less blood than it is supposed to, whereas the other one is
+overloaded, resulting in a structural strain.
+Based on data collected from patients with a ventricular defect over the years, it was
+observed that this overload on the pulmonary circulation leads to pulmonary hypertension,
+triggering body’s adaptation in an attempt to rebalance the flow quantities between the
+pulmonary and systemic circulations. The damages caused by the excessive amount of
+blood reaching the pulmonary artery and subsequent vessels result in injuries, inducing a
+proliferation of wall vascular cells such as smooth muscle cells, endothelial cells, fibroblasts,
+etc. This remodeling results in a thickening of the vessels, effectively increasing pulmonary
+vascular resistance [29].
+Even though they affect the heart in the same way, there are different types of ventricular
+septal defects (Figure 1.9), including conoventricular VSD (a hole where portions of the
+ventricular septum should meet under the semilunar valves); perimembranous VSD (a
+hole in the upper ventricular septum); inlet VSD (a hole in the septum where blood
+enters the ventricles through the atrioventricular valves); and muscular VSD (a hole in
+the lower muscular portion of the septum), which is the most common of the four.
+1| Anatomy and physiology
+15
+Figure 1.9: Ventricular septal defect classification (picture taken from ([30]).
+17
+2| Mathematical Models and
+Numerical Methods
+We present in this chapter the mathematical models used in this study. Firstly, we review
+the lumped-parameter model (section 2.1) used to simulate the cardiac circulation and
+subsequently modified to account for the different congenital heart defects.
+These disease-customized models are addressed using different methods.
+For the defects for which we had real patient data available for this condition, we per-
+formed a calibration with the L-BFGS-B algorithm (Section 2.4) aimed to minimize a
+loss function based on the available clinical data. Throughout the calibration process,
+our approach was enhanced by employing Sobol’ indices (section 2.5) to pinpoint param-
+eters affecting significantly available patient data and allowing L-BFGS-B to vary only
+the identified parameters.
+Minimization of the loss function requires the resolution of the model ODEs system, this
+was made by approximating its solution using the Dormand-Prince method (Section 2.2),
+.
+For the other considered congenital defects, the ode15s solver from MATLAB is em-
+ployed. This solver implements a method based on the Backward Differentiation Formula
+(BDF).(Section 2.3).
+2.1.
+Lumped-parameter mathematical model
+The cardiovascular circulatory system was simulated through a zero dimensional (0D)
+mathematical model that exploits the similarities between blood vessels and an electrical
+circuit. Using this model it’s possible to estimate important physiological data of the
+patient without using invasive measuring systems.
+In this model the circulatory system components are split in different compartments
+characterized by lumped parameters that sums up the related physical quantities.
+18
+2| Mathematical Models and Numerical Methods
+For the blood the current represents its flow rate and the electrical potential its pressure.
+For the vessels the electric resistance is used to simulate the viscous resistance of blood
+flow and the resistance of vessel wall; the capacitance reflects the vessel compliance, i.e. its
+dilatation ability, storing blood and a portion of the kinetic energy of the flow as transient
+elastic potential energy, which is then released during the diastolic phase, allowing for a
+more continuous flow; the inductance, finally, represents the effect of inertia or resistance
+to changes in blood flow.
+There are multiple choices on the number and types of the system compartments: de-
+pending on the purpose and available resources (computational and data-wise) the system
+can be constructed in different ways.
+We developed a computational model inspired by previous ones present in literature [1–
+3], using 0D time varying elastance models for each of the four heart chambers (Equa-
+tions 2.2), 0D (R, L, C) models for the systemic and pulmonary circulations, consider-
+ing their arterial and venous compartments along with the addition of their capillaries
+that, only in the pulmonary system, are further divided into the oxygenated and non-
+oxygenated ones [31], and, finally, 0D non-ideal diode for the cardiac valves .
+Elastance model’s characteristic times and lumped parameters are respectively reported
+in Table 2.1 and Table 2.2.
+2| Mathematical Models and Numerical Methods
+19
+Table 2.1: Cardiac phases characteristic times.
+Acronym
+Full Name
+Value
+Units
+tC
+LA
+Left atrial contraction instant
+0.75 × THB
+s
+T C
+LA
+Left atrial contraction duration
+0.1 × THB
+s
+tR
+LA
+Left atrial relaxation instant
+tC
+LA + T C
+LA
+s
+T R
+LA
+Left atrial relaxation duration
+0.8 × THB
+s
+tC
+RA
+Right atrial contraction instant
+0.8 × THB
+s
+T C
+RA
+Right atrial contraction duration
+0.1 × THB
+s
+tR
+RA
+Right atrial relaxation instant
+tC
+RA + T C
+RA
+s
+T R
+RA
+Right atrial relaxation duration
+0.7 × THB
+s
+tC
+LV
+Left ventricular contraction instant
+0 × THB
+s
+T C
+LV
+Left ventricular contraction duration
+0.265 × THB
+s
+tR
+LV
+Left ventricular relaxation instant
+T C
+LV
+s
+T R
+LV
+Left ventricular relaxation duration
+0.4 × THB
+s
+tC
+RV
+Right ventricular contraction instant
+0 × THB
+s
+T C
+RV
+Right ventricular contraction duration
+0.3 × THB
+s
+tR
+RV
+Right ventricular relaxation instant
+T C
+RV
+s
+T R
+RV
+Right ventricular relaxation duration
+0.4 × THB
+s
+20
+2| Mathematical Models and Numerical Methods
+Table 2.2: Model parameters abbreviations.
+Acronym
+Full Name
+Units of measure
+EA
+LA
+Left atrial active elastance
+mmHg ml−1
+EB
+LA
+Left atrial passive elastance
+mmHg ml−1
+V 0
+LA
+Left atrial unstressed volume
+ml
+EA
+LV
+Left ventricular active elastance
+mmHg ml−1
+EB
+LV
+Left ventricular passive elastance
+mmHg ml−1
+V 0
+LV
+Left ventricular unstressed volume
+ml
+EA
+RA
+Right atrial active elastance
+mmHg ml−1
+EB
+RA
+Right atrial passive elastance
+mmHg ml−1
+V 0
+RA
+Right atrial unstressed volume
+ml
+EA
+RV
+Right ventricular active elastance
+mmHg ml−1
+EB
+RV
+Right ventricular passive elastance
+mmHg ml−1
+V 0
+RV
+Right ventricular unstressed volume
+ml
+RSY S
+AR
+Systemic arterial resistance
+mmHg s ml−1
+CSY S
+AR
+Systemic arterial capacitance
+ml mmHg−1
+LSY S
+AR
+Systemic arterial inductance
+mmHg s2 ml−1
+RSY S
+C
+Systemic capillary resistance
+mmHg s ml−1
+CSY S
+C
+Systemic capillary capacitance
+ml mmHg−1
+RSY S
+V EN
+Systemic venous resistance
+mmHg s ml−1
+CSY S
+V EN
+Systemic venous capacitance
+ml mmHg−1
+LSY S
+V EN
+Systemic venous inductance
+mmHg s2 ml−1
+RPUL
+AR
+Pulmonary arterial resistance
+mmHg s ml−1
+CPUL
+AR
+Pulmonary arterial capacitance
+ml mmHg−1
+LPUL
+AR
+Pulmonary arterial inductance
+mmHg s2 ml−1
+RPUL
+C
+Oxygenated pulmonary capillary resistance
+mmHg s ml−1
+CPUL
+C
+Oxygenated pulmonary capillary capacitance
+ml mmHg−1
+RSH
+Non-oxygenated pulmonary capillary resistance
+mmHg s ml−1
+CSH
+Non-oxygenated pulmonary capillary capacitance
+ml mmHg−1
+RPUL
+V EN
+Pulmonary venous resistance
+mmHg s ml−1
+CPUL
+V EN
+Pulmonary venous capacitance
+ml mmHg−1
+LPUL
+V EN
+Pulmonary venous inductance
+mmHg s2 ml−1
+Rmin
+Minimal valve resistance
+mmHg s ml−1
+Rmax
+Maximal valve resistance
+mmHg s ml−1
+2| Mathematical Models and Numerical Methods
+21
+The chambers are modeled with 0-dimensional elastance relationships [32]:
+pi(t) = pex(t) + Ech(t)(Vch −V0,ch)
+(2.1)
+where pi(t) is the considered chamber pressure, pex(t) represents the external (to the
+heart) pressure exerted by the surrounding organs and respiration, Vch(t) is the cardiac
+volume of the chamber and V0,ch refers to the blood unstressed volume of such chamber.
+In this study the external pressure is set to zero for simplicity , pex(t) = 0.
+The elastance Ech(t) is computed as the sum of a constant value EB called passive elas-
+tance and a sinusoidal oscillating term, which amplitude EA, is called active elastance [1].
+Both EA and EB depend on the considered chamber.
+Ech(t) = EAe(t) + EB
+(2.2)
+A normalized, time-varying and periodic function e(t) regulates the elastance oscillating
+behaviour during the heartbeat, for ventricles this term is computed as:
+ev(t) =
+
+
+
+
+
+
+
+
+
+
+
+1
+2
+h
+1 −cos
+
+π
+t
+Tvc
+i
+if 0 ⩽t ⩽Tvc
+1
+2
+h
+1 + cos
+
+π t−Tvc
+Tvr
+i
+if Tvc < t ⩽Tvc + Tvr
+0
+if Tvc + Tvr < t ⩽THB
+(2.3)
+Whit just a time translation it can be obtained the atria version of this term :
+ea(t) =
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+1
+2
+h
+1 + cos
+
+π t+THB−tar
+Tar
+i
+if 0 ⩽t ⩽tar + Tar −THB
+0
+if tar + Tar −THB < t ⩽tac
+1
+2
+h
+1 −cos
+
+π t−tac
+Tac
+i
+if tac < t ⩽tac + Tac
+1
+2
+h
+1 + cos
+
+π t−tar
+Tar
+i
+if tac + Tac < t ⩽THB
+(2.4)
+Here, the subscript ‘v’ denotes the ventricles, and ‘a’ the atria, THB is the duration
+of a heartbeat.
+The following subscript, ‘c’ or ‘r’, refer to contraction or relaxation,
+respectively. ‘txx’ represents the chamber phase (contraction/relaxation) starting time,
+whereas ‘Txx’ is the phase duration.
+22
+2| Mathematical Models and Numerical Methods
+For each RLC compartment the pressure and flow rate equations can be computed (Equa-
+tions 2.5).
+LdQo
+dt + R · Qo = Pi −Po,
+C d(Pi −pex)
+dt
+= Qi −Qo
+(2.5)
+Figure 2.1: Single compartment circuit representation, legend i:input, o:output. Image
+taken from [1]
+Finally, each cardiac valve resistance RTV (pRA, pRV ), RPV (pRV , pPUL
+AR ), RMV (pLA, pLV ),
+RAV (pLV , pSY S
+AR ) depend on its Pre-valve and Post-valve pressures according to the follow-
+ing relationship:
+Ri(p1, p2) =
+
+
+
+Rmin
+if p1 > p2
+Rmax
+if p1 ≤p2
+for i ∈{MV, AV, TV, PV },
+(2.6)
+where p1 and p2 represent the upstream and downstream pressures with respect to the
+flow direction, whereas Rmin and Rmax are the minimum and maximum resistance of the
+valves.
+In an ideal valve, Rmin would be 0 to simulate complete opening and perfect blood passage.
+Rmax, on the other hand, would be infinitely large (+∞) to model a complete closure of
+the leaflets.
+In reality there is dissipation of mechanical energy in the first scenario and some blood
+leakage (called ‘valve regurgitation’) in the second one.
+2| Mathematical Models and Numerical Methods
+23
+Figure 2.2: Lumped-parameter cardiocirculatory model. The system unkwnown pressures
+and flow rates are in red and blue, respectively, whereas the model parameters are in black.
+Image taken from [31]
+The resulting system of ODEs associated with the lumped-parameters system is obtained
+by setting the continuity equations of flow rates at the circuit nodes and of pressure in
+the vessels.
+By solving this system it can be obtained the numerical solution of the
+temporal trend within one heartbeat of the system unknowns: the 4 chambers volumes
+24
+2| Mathematical Models and Numerical Methods
+VRA(t), VLA(t), VRV (t), VLV (t), the systemic and pulmonary arterial, capillary and venous
+pressures pSY S
+V EN(t), pPUL
+V EN(t), pSY S
+AR (t), pPUL
+AR (t), pSY S
+C
+(t), pPUL
+C
+(t), and the systemic and pul-
+monary arterial and venous blood fluxes QSY S
+V EN(t), QPUL
+V EN(t), QSY S
+AR (t), QPUL
+AR (t).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CSY S
+V EN
+dpSY S
+V EN
+dt
+= QSY S
+AR
+−QSY S
+V EN
+CP UL
+V EN
+dpP UL
+V EN
+dt
+= QP UL
+AR
+−QP UL
+V EN
+LSY S
+V EN
+RSY S
+V EN
+dQSY S
+V EN
+dt
+= −QSY S
+V EN −pRA −pSY S
+V EN
+RSY S
+V EN
+LP UL
+V EN
+RP UL
+V EN
+dQP UL
+V EN
+dt
+= −QP UL
+V EN −pLA −pP UL
+V EN
+RP UL
+V EN
+dVRA
+dt
+= QSY S
+V EN −QT V (pRA, pRV )
+dVLA
+dt
+= QP UL
+V EN −QMV (pLA, pLV )
+dVRV
+dt
+= QT V (pRA, pRV ) −QP V (pRV , pP UL
+AR )
+dVLV
+dt
+= QMV (pLA, pLV ) −QAV (pLV , pSY S
+AR )
+CP UL
+AR
+dpP UL
+AR
+dt
+= QP V (pRV , pP UL
+AR ) −QP UL
+AR
+CSY S
+AR
+dpSY S
+AR
+dt
+= QAV (pLV , pSY S
+AR ) −QSY S
+AR
+LP UL
+AR
+RP UL
+AR
+dQP UL
+AR
+dt
+= −QP UL
+AR
+−pP UL
+V EN −pP UL
+AR
+RP UL
+AR
+LSY S
+AR
+RSY S
+AR
+dQSY S
+AR
+dt
+= −QSY S
+AR
+−pSY S
+V EN −pSY S
+AR
+RSY S
+AR
+CSY S
+C
+dpSY S
+C
+dt
+= QSY S
+AR
+−QSY S
+C
+(pSY S
+C
+, pSY S
+V EN)
+dpP UL
+C
+dt
+= QP UL
+AR
+−QSH(pP UL
+C
+, pP UL
+V EN) −QP UL
+C
+(pP UL
+C
+, pP UL
+V EN)
+(CP UL
+C
++ CSH)
+(2.7)
+From the unknowns a lot other quantities can be computed, such as the atrial and
+ventricular pressures pRA(t), pLA(t), pRV (t), pLV (t), the blood fluxes through the cardiac
+valves QTV (t), QMV (t), QPV (t), QAV (t), the fluxes across the capillaries QSY S
+C
+(t), QPUL
+C
+(t)
+, QSH(t) and a lot more useful quantities. Some of these important clinical quantities are
+listed in the Table 2.3.
+Given the substantial physical variability among patients, it is also possible to calculate
+the indexed version of these clinical quantities by dividing them by the Body Surface Area
+BSA, making them more standardized and comparable across individuals with different
+body sizes.
+2| Mathematical Models and Numerical Methods
+25
+Table 2.3: Computable patient quantities
+Acronym
+Full Name
+Calculation
+Units
+V MAX
+LA
+Left Atrial Maximal Volume
+max(VLA)
+ml
+LVSV
+Left Ventricular Stroke Volume
+max(VLV ) −min(VLV )
+ml
+CO
+Cardiac Output
+LVSV × HR
+1000
+l/min
+LVEDV
+Left Ventricular End Diastolic Volume
+max(VLV )
+ml
+LVESV
+Left Ventricular End Systolic Volume
+min(VLV )
+ml
+LVEF
+Left Ventricular Ejection Fraction
+LVSV
+LVEDV × 100
+%
+P MAX
+LA
+Left Atrial Maximal Pressure
+max(PLA)
+mmHg
+P MIN
+LA
+Left Atrial Minimal Pressure
+min(PLA)
+mmHg
+P MEAN
+LA
+Left Atrial Mean Pressure
+R
+THB PLA dt
+THB
+mmHg
+P MAX
+LV
+Left Ventricular Maximal Pressure
+max(PLV )
+mmHg
+P MIN
+LV
+Left Ventricular Minimal Pressure
+min(PLV )
+mmHg
+V MAX
+RA
+Right Atrial Maximal Volume
+max(VRA)
+ml
+RVSV
+Right Ventricular Stroke Volume
+max(VRV ) −min(VRV )
+ml
+RVEDV
+Right Ventricular End Diastolic Volume
+max(VRV )
+ml
+RVESV
+Right Ventricular End Systolic Volume
+min(VRV )
+ml
+RVEF
+Right Ventricular Ejection Fraction
+(1 −RVESV
+RVEDV ) × 100
+%
+P MAX
+RA
+Right Atrial Maximal Pressure
+max(PRA)
+mmHg
+P MIN
+RA
+Right Atrial Minimal Pressure
+min(PRA)
+mmHg
+P MEAN
+RA
+Right Atrial Mean Pressure
+R
+THB PRA dt
+THB
+mmHg
+P MAX
+RV
+Right Ventricular Maximal Pressure
+max(PRV )
+mmHg
+P MIN
+RV
+Right Ventricular Minimal Pressure
+min(PRV )
+mmHg
+SAPMAX
+Systolic Systemic Arterial Pressure
+max(P SY S
+AR )
+mmHg
+SAPMIN
+Diastolic Systemic Arterial Pressure
+min(P SY S
+AR )
+mmHg
+SAPMEAN
+Mean Systemic Arterial Pressure
+R
+THB P SY S
+AR
+dt
+THB
+mmHg
+SCPMEAN
+Mean Systemic Capillary Pressure
+R
+THB P SY S
+C
+dt
+THB
+mmHg
+SV PMEAN
+Mean Systemic Venous Pressure
+R
+THB P SY S
+V EN dt
+THB
+mmHg
+PAPMAX
+Systolic Pulmonary Arterial Pressure
+max(P PUL
+AR )
+mmHg
+PAPMIN
+Diastolic Pulmonary Arterial Pressure
+min(P PUL
+AR )
+mmHg
+PAPMEAN
+Mean Pulmonary Arterial Pressure
+R
+THB P P UL
+AR
+dt
+THB
+mmHg
+PWPMAX
+Maximal Pulmonary Wedge Pressure
+max(P PUL
+V EN)
+mmHg
+PWPMIN
+Minimal Pulmonary Wedge Pressure
+min(P PUL
+V EN)
+mmHg
+PWPMEAN
+Mean Pulmonary Wedge Pressure
+R
+THB P P UL
+V EN dt
+THB
+mmHg
+shunt
+Shunt Fraction
+R
+THB QSH dt
+(THB)
+× 1000
+60 × 100
+%
+26
+2| Mathematical Models and Numerical Methods
+2.2.
+Dormand-Prince method
+The Dormand-prince method belongs to the embeeded Runge-Kutta family of methods
+for the numerical solution of ordinary differential equations.
+Runge-Kutta methods aim to find the numerical solution of the initial value problem:
+dy(t)
+dt
+= f(t, y),
+y(t0) = y0
+(2.8)
+And have the general formula:
+yn+1 = yn + h
+s
+X
+i=1
+biki,
+ki = f
+ 
+tn + cih, yn + h
+s
+X
+j=1
+aijkj
+!
+,
+i = 1, ....s
+(2.9)
+y(t) is the unknown function of the problem, its rate of change dy(t)
+dt
+is a function f de-
+pending on time t and of y(t) itself.
+yn(t) is the numerical solution at each step (n) of size h of the method, computed along
+[t0, tf], namely the considered time frame (in this study context the heartbeat period).
+For each time instant tn the new numerical solution yn+1(t) is computed using the pre-
+vious solution at that point yn(t) and a weighted combination of coefficients ki .
+These coefficients use the problem f to give an evaluation of the function y derivatives in
+the time step proximity.
+Information is gathered from specific points within the time interval determined by the
+method step size h. Evaluating the derivatives of the function at various intermediate
+points (fractions of h), allows the method to capture the behavior of the function more
+accurately within the given interval.
+The characteristics of the different Runge-Kutta methods depend on the parameters set
+aij, bj, ci, usually arranged together in a mnemonic device, known as Butcher tableau (Ta-
+ble 2.4).
+The parameters summed up in the Butcher tableau decide the computation (aij, ci) and
+2| Mathematical Models and Numerical Methods
+27
+c1
+a11
+a12
+. . .
+a1,s−1
+a1,s
+c2
+a21
+a22
+. . .
+a2,s−1
+a2,s
+c3
+a31
+a32
+. . .
+a3,s−1
+a3,s
+...
+...
+...
+...
+...
+...
+cs
+as1
+as2
+. . .
+as,s−1
+as,s
+b1
+b2
+. . .
+bs−1
+bs
+Table 2.4: Butcher tableau for Runge-Kutta methods
+the weight (bj) of the coefficients ki.
+If, for instance, the parameters aij are zero for every j ≥i, only data from the previous
+steps (n or below) is used for the evaluation of the new yn+1, making the method explicit.
+The embedded Runge-Kutta methods are designed to produce an estimate of the local
+truncation error of a single Runge–Kutta step, and as a result, allow to control the error
+by adapting the step size h.
+This is achieved by combining two methods (Table 2.5): the standard one bi with con-
+vergence order p (Equation 2.9) and a second one b∗
+i with lower convergence order p-1:
+y∗
+n+1 = yn + h
+s
+X
+i=1
+b∗
+i ki
+(2.10)
+c1
+a11
+a12
+. . .
+a1,s−1
+a1,s
+c2
+a21
+a22
+. . .
+a2,s−1
+a2,s
+c3
+a31
+a32
+. . .
+a3,s−1
+a3,s
+...
+...
+...
+...
+...
+...
+cs
+as1
+as2
+. . .
+as,s−1
+as,s
+b1
+b2
+. . .
+bs−1
+bs
+b∗
+1
+b∗
+2
+. . .
+b∗
+s−1
+b∗
+s
+Table 2.5: Butcher tableau for Embedded Runge-Kutta methods
+28
+2| Mathematical Models and Numerical Methods
+Dormand-Prince uses 6 estimations of the function f to calculate fourth and fifth order
+accurate solutions (Table 2.6 , Equations 2.11).
+0
+1
+5
+1
+5
+3
+10
+3
+40
+9
+40
+4
+5
+44
+45
+−56
+15
+32
+9
+8
+9
+19372
+6561
+−25360
+2187
+64448
+6561
+−212
+729
+1
+9017
+3168
+−355
+33
+46732
+5247
+49
+176
+−5103
+18656
+1
+35
+384
+0
+500
+1113
+125
+192
+−2187
+6784
+11
+84
+35
+384
+0
+500
+1113
+125
+192
+−2187
+6784
+11
+84
+0
+5179
+57600
+0
+7571
+16695
+393
+640
+−92097
+339200
+187
+2100
+1
+40
+Table 2.6: Butcher tableau for Dorman-Prince method
+k1 = f(tn, yn),
+k2 = f
+ tn + 1
+5h, yn + 1
+5k1
+
+,
+k3 = f
+ tn + 3
+10h, yn + 3
+40k1 + 9
+40k2
+
+,
+k4 = f
+ tn + 4
+5h, yn + 44
+45k1 −56
+15k2 + 32
+9 k3
+
+,
+k5 = f
+ tn + 8
+9h, yn + 19372
+6561 k1 −25360
+2187 k2 + 64448
+6561 k3 −212
+729k4
+
+,
+k6 = f
+ tn + h, yn + 9017
+3168k1 −355
+33 k2 + 46732
+5247 k3 + 49
+176k4 −5103
+18656k5
+
+,
+k7 = f
+ tn + h, yn + 35
+384k1 + 500
+1113k3 + 125
+192k4 −2187
+6784k5 + 11
+84k6
+
+.
+(2.11)
+The difference between the two solutions (Equation 2.12) is taken as the error (of the
+fourth-order solution) by the method to compute the new adapted step size hopt (Equa-
+tion 2.13).
+en+1 = yn+1 −y∗
+n+1
+(2.12)
+2| Mathematical Models and Numerical Methods
+29
+hopt = h ·
+
+εh
+2 · |en+1|
+ 1
+5
+(2.13)
+In conclusion, the Dormand-Prince method, an embedded (and explicit) method, strate-
+gically chooses coefficients to minimize errors in the fifth-order solution. Despite its seven-
+stage structure, it uses only six evaluations per step. It’s noteworthy that k2 remains
+unused in the solutions computation, a direct outcome of the specific coefficient selection.
+30
+2| Mathematical Models and Numerical Methods
+2.3.
+Backward differentiation formula
+The backward differentiation formula is a family of implicit methods for the numerical
+integration of initial value problems (Equation 2.8).
+dy(t)
+dt
+= f(t, y),
+y(t0) = y0
+(2.14)
+s
+X
+k=0
+ak · yn+k = hβf(tn+s, yn+s)
+(2.15)
+They, in turn, belong to the broader family of the linear multistep methods.
+Runge-Kutta methods (reviewed in Section 2.2) involve taking intermediate steps to
+achieve a higher order, but they discard all previous information before proceeding to
+the next step.
+In contrast, multistep methods aim to enhance efficiency by retaining and utilizing in-
+formation from previous steps instead of discarding it. As a result, multistep methods
+consider several preceding points and derivative values in their computations.
+Ode15s provided by MATLAB® is one of the two solvers used in this study, it imple-
+ments a variable step, variable order Backward Differentiation Formula (BDF) method
+that ranges from order 1 to 5 [33].
+yn+1 −yn = hf(tn+1, yn+1)
+yn+2 −4
+3yn+1 + 1
+3yn = 2
+3hf(tn+2, yn+2)
+yn+3 −18
+11yn+2 + 9
+11yn+1 −2
+11yn = 6
+11hf(tn+3, yn+3)
+yn+4 −48
+25yn+3 + 36
+25yn+2 −16
+25yn+1 + 3
+25yn = 12
+25hf(tn+4, yn+4)
+yn+5 −300
+137yn+4 + 300
+137yn+3 −200
+137yn+2 + 75
+137yn+1 −12
+137yn = 60
+137hf(tn+5, yn+5)
+(2.16)
+The Equations 2.16 are nonlinear, it is a consequence of the implicit nature of the Back-
+ward Differentiation Formulas employed.
+2| Mathematical Models and Numerical Methods
+31
+The solution at the next time step is implicitly embedded in the equation, necessitating
+the use of iterative methods to solve for it.
+The order of the BDF equation, dictates the complexity of the nonlinear system. Higher-
+order BDFs involve more terms of the previous solution, resulting in more intricate non-
+linear equations. This intricacy, however, comes with a significant benefit.
+Higher-order BDFs are particularly advantageous in handling stiff problems, where rapid
+changes in some components of the system require smaller time steps for stability.
+The adaptive nature of the ode15s method allows it to dynamically adjust the order of
+the BDF method on each iteration, based on the stiffness of the system.
+To solve these nonlinear equations, ode15s utilizes iterative approaches, such as the
+Newton-Raphson.
+xn+1 = xn −J−1(xn)F(xn)
+(2.17)
+Where xn+1 is the new solution approximation, xn is the current step solution approx-
+imation, F is the problem function and J its Jacobian matrix. This iterative method
+starts from an initial guess and look for the vector solution x of the root problem (Equa-
+tion 2.18) until a convergence criteria is achieved.
+F(x) = 0
+(2.18)
+In each iteration it refines the root position xn+1 using the direction given by the inverse
+Jacobian matrix of the problem function.
+32
+2| Mathematical Models and Numerical Methods
+2.4.
+L-BFGS-B
+We calibrated the lumped-parameter model for different clinical data sets using an opti-
+mization method.
+Employing a loss function L, we quantified numerically the discrepancy between the model
+output data and the in vivo clinical measurements at our disposal.
+L(p) = 1
+N
+N
+X
+i=1
+qi(p) −di
+di
+2
+(2.19)
+where N is the number of available clinical data and di the value of the i-th clinical
+data. qi is the value of the model output related to the i-th clinical data, computed with
+a lumped-parameters configuration p
+Through the minimization of this loss function, the method actively seeks a lumped-
+parameters configuration that reproduces the patient data as close as possible.
+The optimization, achieved by loss minimization means, was executed using the Quasi-
+Newton method L-BFGS-B implemented in Scipy [34].
+This is a Limited memory (‘L-’) and Bounded (‘-B’) version of the Broyden, Fletcher,
+Goldfarb, Shanno (BFGS) algorithm.
+BFGS is an iterative method for solving unconstrained nonlinear optimization problems,
+it improves the descent direction, usually determined by the gradient, by preconditioning
+the gradient itself with information on the loss function curvature.
+This curvature information is provided by the inverse of the loss function Hessian matrix.
+Calculating the precise Hessian matrix, which involves second-order partial derivatives of
+the loss function with respect to each variable, can be computationally demanding and
+impractical, especially in high-dimensional optimization problems.
+Instead, BFGS uses an approximation Bk for the inverse Hessian matrix and iteratively
+improves it by considering the differences between successive positions sk and their cor-
+responding gradients yk.
+Bk+1 = Bk + ykyT
+k
+yT
+k sk
+−BksksT
+k Bk
+sT
+k Bksk
+(2.20)
+While the standard BFGS method stores a complete n×n matrix, L-BFGS-B represents
+this inverse Hessian approximation implicitly by maintaining a limited set of vectors.
+2| Mathematical Models and Numerical Methods
+33
+This memory-saving strategy not only reduces the computational cost but also allows
+L-BFGS-B to store information from multiple previous steps, effectively extending its
+"memory" to consider a more extensive history of iterations.
+Additionaly, L-BFGS-B employs bound constraints on variables. Each problem variable
+xi can be constrained in a box with a lower bound li and an upper bound ui. The approach
+involves identifying both fixed and free variables at each step through a straightforward
+gradient method. Subsequently, the L-BFGS method is applied exclusively to the free
+variables, increasing the overall efficiency of the process.
+The algorithm outline is reported in Table 2.7.
+It initializes by computing the gradient of the loss function at the current point. The
+algorithm maintains information from the last m iterations, tracking differences in posi-
+tions (sk) and corresponding gradients (yk). It employs a first cycle to calculate a search
+direction q and updates it iteratively using coefficients αi, computed from stored si and
+yi. These coefficients αi measure how much the previous stages gradients should weight
+on the corrections made on the descent direction.
+Subsequently, it computes an initial approximation of the inverse Hessian B0
+k and de-
+termines the initial descent direction z. The second cycle refines z by adjusting it with
+coefficients βi calculated again from the stored gradients.
+Finally, it computes the descent direction pk, calculate the next step solution xk+1, and
+adjusts the inverse Hessian approximation for the next iteration (Equation 2.20). The
+algorithm repeats these steps until a convergence criterion is met.
+34
+2| Mathematical Models and Numerical Methods
+Table 2.7: L-BFGS-B Optimization Algorithm
+For k = 1, 2, . . . , max_iter
+Compute the gradient gk = ∇f(xk)
+Last m states stored as:
+sk = xk+1 −xk
+yk = gk+1 −gk
+ρk = 1/(yT
+k sk)
+Initialize q = gk
+For i = k, k −1, . . . , k −m + 1
+Compute αi = ρisT
+i q
+Update q = q −αiyi
+Compute an initial approximation of the inverse Hessian B0
+k = sk−1yk−1
+yT
+k−1yk−1
+Compute the initial direction of descent z = B0
+kq
+For i = k −m, k −m + 1, . . . , k −1
+Compute βi = ρiyT
+i z
+Update z = z + (αi −βi)si
+Compute the direction of descent pk = −z
+Update xk+1 = xk + αkpk;
+Update B0
+k+1 using BFGS update formula
+Store the current iteration for future use
+Check for convergence
+If convergence is reached, break the loop
+2| Mathematical Models and Numerical Methods
+35
+2.5.
+Sobol’ indices
+Sobol indices are a technique used in a global sensitivity analysis to quantify the relative
+impact of different input features in a mathematical or computational model.
+These indices provide information on how variations in each input variables affect the
+different model’s outputs.
+Operating in a probabilistic framework, each model output Y variance is decomposed into
+portions which can be attributed to the different model features.
+If, for instance, by fixing one input variable the variance of a model output significantly
+decrease, it means that its influence on the output computation was quite big.
+Variance-based sensitivity measures are particularly convenient: they assess sensitivity
+throughout the entire input space, they are capable of handling non-linear responses, and
+they can quantify the impact of interactions in systems that are non-additive.
+To simplify the notation and maintain generality, the equations that follow will assume
+that the input variables are uniformly distributed in the interval [0, 1]. Consequently, the
+input set’s support is considered to be DX = [0, 1]M.
+It is assumed that the inputs are distributed independently and uniformly within the
+unit hypercube Xi ∈[0, 1] for i = 1, 2, . . . , d.
+Initially, each output Y can be decomposed:
+Y = f0 +
+d
+X
+i=1
+fi(Xi) +
+d
+X
+i<j
+fij(Xi, Xj) + · · · + f1,2,...,d(X1, X2, . . . , Xd)
+(2.21)
+where f0 is constant, fi is a function of Xi and fij is a function of Xi and Xj.
+A condition of this Sobol’ decomposition is that the integrals of the summands with
+respect to their own variables fi1,...,is vanish:
+Z 1
+0
+fi1,...,is(Xi1,...,is)dXik = 0
+if
+1 ≤k ≤s
+(2.22)
+This implies that all the functional terms involved in this decomposition are orthogonal.
+The terms of the functional decomposition can now be expressed as conditional expected
+values (Equations 2.23).
+36
+2| Mathematical Models and Numerical Methods
+f0 = E(Y ),
+fi(Xi) = E(Y |Xi) −f0,
+fij(Xi, Xj) = E(Y |Xi, Xj) −f0 −fi −fj
+(2.23)
+Subsequently by assuming that f(X) is square-integrable the decomposition (Equa-
+tion 2.21) can be squared and integrated (Equation 2.24).
+Z
+f 2(X) dX −f 2
+0 =
+d
+X
+s=1
+d
+X
+i1<···<is
+Z
+f 2
+i1,...,is dXi1 . . . dXis
+(2.24)
+Here, the left-hand side denotes the sought variance of one model model output Y ,
+whereas the right hand side terms are variance terms, now decomposed for different sets
+of the model inputs X:
+V ar(Y ) =
+d
+X
+i=1
+Vi +
+d
+X
+i=1
+Vij + · · · + V12...d,
+Vi = V arXi(EX∼i(Y |Xi)),
+Vij = V arXij(EX∼ij(Y |Xi, Xj)) −Vi −Vj,
+(2.25)
+The notations X∼i indicates the set of all input variables X except Xi.
+The resulting decomposition shows how the total variance of each model output V ar(Y )
+is the sum of variance terms attributable to each input, as well as the variance interaction
+effects between them.
+Following this variance decomposition first and higher order Sobol’ indices are naturally
+defined:
+Si1,...,is = Vi1,...,is
+V ar(Y )
+(2.26)
+The index with respect to one input variable Si is called the first-order Sobol’ index and
+represents its effect on the model output studied Y .
+Multiple-term indices Sij are called higher order Sobol’ indices and measure the effect on
+the model output of the input interactions. Specifically, second-order indices (Sij) account
+for pairwise interactions, third-order indices (Sijk) consider interactions among triplets,
+and so forth. The impact of these interactions cannot be decomposed into contributions
+2| Mathematical Models and Numerical Methods
+37
+of single variables.
+Measuring the total impact of a single model input would require to sum all the sobol’indices
+in which it is involved:
+STi = Si +
+N
+X
+j=1
+j̸=i
+Sij +
+N
+X
+j,k=1
+j̸=i,k̸=i,j<k
+Sijk + · · · + S1...N
+(2.27)
+This procedure would require the explicit computation of all the Sobol’ indices up to the
+order N, where N is the number of model inputs. The implication is that this calculation
+becomes overly expensive in terms of computational resources as the number of variables
+N becomes significantly large.
+For this reason, the formula for Total-effect Sobol indices STi is reformulated into a more
+practical expression (Equation 2.28).
+STi = 1 −V arX∼i(EXi(Y |X∼i))
+V ar(Y )
+(2.28)
+Now the total index is computed starting from a variance term due to all the model
+variables excluding the analyzed variable Xi. By subtracting this quantity to 1 what
+remains is the whole output sensitivity fraction for which the input Xi is responsible.
+39
+3| Modelling of congenital
+diseases
+In this section we review the customization procedure made on the base lumped-parameters
+model to account for the studied congenital defects.
+3.1.
+PFO implementation: Bernoulli valve model
+We modeled the foramen as a valve model based on the Bernoulli formula [4, 5]. The rela-
+tion between pressure gradient ∆p and flow q through an open valve can be approximated
+by the Bernoulli equation.
+∆p = RB
+PFOq|q| + LPFO
+dq
+dt
+(3.1)
+Poiseuille viscous losses (proportional to flow rate q) are small and have thus been ne-
+glected [35].
+The parameter RB
+PFO is called Bernoulli resistance and governs pressure gradients related
+to convective acceleration and dynamic pressure losses caused by the diverging flow past
+the valve.
+RB
+PFO =
+ρ
+2A2
+eff
+(3.2)
+where ρ is the considered liquid density and Aeff is the effective open area of the valve
+orifice.
+In this study context we consider for blood a density ρ = 1.06g/cm3.
+The parameter L is called Bernoulli inertance and accounts for the blood acceleration
+effects.
+40
+3| Modelling of congenital diseases
+LPFO = ρ leff
+Aeff
+(3.3)
+where leff is the valve effective length and it is estimated in the foramen context as the
+septum primum and septum secundum overlap.
+Aeff is considered to be variable in time depending on the valve dynamics.
+Aeff(t) = [Aeff,max −Aeff,min] ζ(t) + Aeff,min
+(3.4)
+where ζ(t) is an index representing the valve dynamic. It ranges from a minimum of
+0, when the valve is completely closed, to a maximum of 1 when the valve is completely
+open.
+The orifice effective area ranges between Aeff,min and Aeff,max. These two bound values
+can be further expressed as
+Aeff,min = MregAann
+Aeff,max = MsteAann
+(3.5)
+Aann is the area of the annulus containing the foramen.
+Mreg is called regurgitation factor and allow the model to account for the regurgitation
+phenomenon explained in Section 1.2.
+Mste is called stenosis factor and account for orifice narrowing due to valve constriction.
+For simplicity this parameter has been set to 1, ignoring the stenosis effects.
+Although the valve dynamic is known to be influenced by a number of complex factors,
+such as the vortex dynamics, the most important one appears to be the pressure gradient
+∆p across the valve [36–38].
+dζ
+dt = (1 −ζ) Kvo (∆p −∆popen)
+if ∆p ≥0
+dζ
+dt = ζ Kvc (∆p −∆pclose)
+if ∆p < 0
+(3.6)
+The valve opening and closure starts when the pressure gradient exceeds a threshold
+values, respectively ∆popen and ∆pclose.
+3| Modelling of congenital diseases
+41
+Both these threshold parameters are set to zero for simplicity.
+Kvo (valve opening) and Kvc (valve closure) are rate coefficients (units: mmHg−1s−1)
+that regulate the valve dynamic speed.
+The foramen parameters used, taken from [5], are summed up in the Table 3.1.
+Table 3.1: Foramen model parameters
+Parameter
+Value
+Unit of measure
+leff
+8.0
+mm
+Kvo
+64.5
+mmHg−1s−1
+Kvc
+96.8
+mmHg−1s−1
+∆popen
+0
+mmHg
+∆pclose
+0
+mmHg
+Mreg
+0.01
+-
+Mste
+1
+-
+Using data on foramen typical dimensions [39], three scenario with increasing orifice
+radius have been considered , Table 3.2.
+Table 3.2: Foramen radius
+Radius
+Value
+Unit of measure
+rsmall
+5.0
+mm
+rmedium
+9.0
+mm
+rlarge
+13.0
+mm
+The Bernoulli model for the foramen has been added to the 0D lumped-parameters model
+(Figure 3.1). The shunt is defined as positive for blood moving from the right atrium to
+the left atrium.
+The equations of the model affected by the foramen implementation are those that govern
+the behavior of atrial volumes. Their modified version is reported below.
+
+
+
+
+
+
+
+dVRA
+dt
+= QSY S
+V EN −QTV (pRA, pRV ) −QPFO(pRA, pLA)
+dVLA
+dt
+= QPUL
+V EN −QMV (pLA, pLV ) + QPFO(pRA, pLA)
+(3.7)
+42
+3| Modelling of congenital diseases
+Figure 3.1: Patent foramen ovale (PFO) addition to the 0D lumped-parameters model.
+The new PFO compartment is highlighted with a green box. The systemic and pulmonary
+arterial compartments were dashed for a better readability.
+The lumped-parameters used for the foramen simulation were calibrated to produce clin-
+ical outputs into a healthy range for a male adult, Table 3.3.
+3| Modelling of congenital diseases
+43
+Table 3.3: Healty male adult lumped-parameters
+Parameter
+Value
+Unit of measure
+EA
+LA
+0.38
+mmHg ml−1
+EB
+LA
+0.27
+mmHg ml−1
+V 0
+LA
+2.3085
+ml
+EA
+LV
+2.7
+mmHg ml−1
+EB
+LV
+6.9 × 10−2
+mmHg ml−1
+V 0
+LV
+3.5385
+ml
+EA
+RA
+1.26 × 10−1
+mmHg ml−1
+EB
+RA
+0.195
+mmHg ml−1
+V 0
+RA
+3.5385
+ml
+EA
+RV
+0.43
+mmHg ml−1
+EB
+RV
+4.1264 × 10−2
+mmHg ml−1
+V 0
+RV
+8.4067
+ml
+RSY S
+AR
+0.5911
+mmHg s ml−1
+CSY S
+AR
+1.3315
+ml mmHg−1
+LSY S
+AR
+2.9643 × 10−4
+mmHg s2 ml−1
+RSY S
+C
+2.17 × 10−2
+mmHg s ml−1
+CSY S
+C
+2.7981 × 10−1
+ml mmHg−1
+RSY S
+V EN
+3.596 × 10−1
+mmHg s ml−1
+CSY S
+V EN
+7.5 × 10+1
+ml mmHg−1
+LSY S
+V EN
+2.0643 × 10−5
+mmHg s2 ml−1
+RPUL
+AR
+0.0714
+mmHg s ml−1
+CPUL
+AR
+6.0043
+ml mmHg−1
+LPUL
+AR
+2.0643 × 10−5
+mmHg s2 ml−1
+RPUL
+C
+1.7538 × 10−2
+mmHg s ml−1
+CPUL
+C
+5.7803
+ml mmHg−1
+RSH
+3.5174 × 10−1
+mmHg s ml−1
+CSH
+4.9043 × 10−2
+ml mmHg−1
+RPUL
+V EN
+3.75 × 10−2
+mmHg s ml−1
+CPUL
+V EN
+1.1381 × 10+1
+ml mmHg−1
+LPUL
+V EN
+2.0643 × 10−5
+mmHg s2 ml−1
+Rmin
+6.2872 × 10−3
+mmHg s ml−1
+Rmax
+9.4168 × 10+4
+mmHg s ml−1
+44
+3| Modelling of congenital diseases
+The study of the foramen right to left shunt requires a condition that makes the right
+atrium pressure exceed the left one.
+We achieved this right to left positive pressure gradient by simulating a constriction of
+the pulmonary artery. The right heart struggles more to pump blood into the pulmonary
+circulation, resulting in an increase in the right ventricle and right atrium pressures.
+The vessel narrowing makes its radius change and consequently its related lumped pa-
+rameters.
+The pulmonary arterial parameters are modified following the vessel electrical analogy
+equations based on the Poiseuille steady-state flow [40].
+R = 8µl
+πr4
+C = 3πr3l
+2Eh
+L = 9ρl
+4πr2
+(3.8)
+Considering a radius ratio of r/r0 = 0.8 between the constricted radius r and the reference
+healthy radius r0, the arterial pulmonary base parameters from Table 3.3 greatly change,
+Table 3.4.
+Table 3.4: Constricted pulmonary artery parameters
+Parameter
+Value
+Unit of measure
+RPUL
+AR
+0.1743
+mmHg s ml−1
+CPUL
+AR
+3.074
+ml mmHg−1
+LPUL
+AR
+3.2254 × 10−5
+mmHg s2 ml−1
+3| Modelling of congenital diseases
+45
+3.2.
+PAPVR modelling: pulmonary venous compart-
+ment split
+Partial anomalous pulmonary venous return is a congenital defect in which one or more
+pulmonary veins do not drain in the left atrium but are instead, incorrectly attached to
+the systemic venous system.
+It results that the implementation of this disease requires the independent management of
+the different pulmonary veins. For this reason the pulmonary venous compartment of the
+healthy reference model (Table 3.3) has been decomposed into the four main pulmonary
+veins using formulas for parallel equivalent circuits. The original segment and the four
+resulting segments naturally share the same pressure at both the inlet (P PUL
+V EN) and outlet
+(PLA) points.
+The single pulmonary vein parameters results:
+1
+Req
+= 1
+R1
++ 1
+R2
+. . . 1
+RN
+RV EIN = 4RSY S
+V EN
+Ceq = C1 + C2 + · · · + CN
+CV EIN = 1
+4 CSY S
+V EN
+1
+Leq
+= 1
+L1
++ 1
+L2
+. . . 1
+LN
+LV EIN = 4LSY S
+V EN
+The resulting pulmonary veins are therefore completely identical between each other; no
+considerations are made regarding their exact shape or their origin (left or right lung).
+Following this decomposition, the veins can be detached from the left atrium and con-
+nected to the right atrium or its tributaries.
+In this study, we consider cases in which the anomalous veins are directly connected to
+the right atrium or the superior vena cava.
+In both of these scenarios, we examine cases with one, two or three anomalous veins, all
+connected to the same location (right atrium or superior vena cava).
+Whether anomalous or not, the four pulmonary veins share the same origin pressure P PUL
+V EN,
+whereas their downstream pressure depends on where they are attached. Consequently,
+their capacitances can be considered once again in parallel and, therefore, reassembled
+together.
+The customized models for the atrium case and the superior vena cava case are depicted
+in the respective figures 3.2, 3.3.
+Although only the scenario with a single anomalous vein is shown in these figures, we
+have analogously modified the model for the cases with two and three anomalous veins.
+In the atrium case each normal pulmonary vein blood flow QPUL
+V EIN,i is regulated by the
+46
+3| Modelling of congenital diseases
+classical R-L equation. Ni is total number of normal veins.
+LPUL
+V EIN
+RPUL
+V EIN
+dQPUL
+V EIN,i
+dt
+= −QPUL
+V EIN,i −pLA −pPUL
+V EN
+RPUL
+V EIN
+(3.9)
+Whereas each anomalous vein now drain in the right atrium a blood flow QPUL
+V EIN,j, reg-
+ulated by the following equation. Nj is total number of anomalous veins.
+LPUL
+V EIN
+RPUL
+V EIN
+dQPUL
+V EIN,j
+dt
+= −QPUL
+V EIN,j −pRA −pPUL
+V EN
+RPUL
+V EIN
+(3.10)
+The left atrium receives only the blood from the normal veins, whereas the right atrium
+receives the blood from the systemic venous compartment and from the anomalous veins:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+dVLA
+dt
+=
+Ni
+X
+i=1
+QPUL
+V EIN,i −QMV (pLA, pLV )
+dVRA
+dt
+= QSY S
+V EN +
+Nj
+X
+j=1
+QPUL
+V EIN,j −QTV (pRA, pRV )
+(3.11)
+In the superior vena cava case the equation for each normal vein is the same as in the
+atrium case 3.9.
+In contrast, now, the anomalous veins converge into the superior vena cava.
+LPUL
+V EIN
+RPUL
+V EIN
+dQPUL
+V EIN,j
+dt
+= −QPUL
+V EIN,j −pSV C −pPUL
+V EN
+RPUL
+V EIN
+(3.12)
+Superior vena cava’s pressure and flow rate are again regulated by the RLC equations:
+
+
+
+
+
+
+
+
+
+
+
+CSV C
+dpSV C
+dt
+= QSY S
+V EN +
+Nj
+X
+j=1
+QPUL
+V EIN,j −QSV C
+LSV C
+RSV C
+dQSV C
+dt
+= −QSV C −pRA −pSV C
+RSV C
+(3.13)
+The left atrial volume equation is the same as in the atrium case (Equation 3.11), whereas
+the right atrial one become:
+dVRA
+dt
+= QSV C −QTV (pRA, pRV )
+(3.14)
+3| Modelling of congenital diseases
+47
+The parameters used for both cases in the PAPVR simulations are the ones contained
+in Table 3.1.
+Figure 3.2:
+Partial anomalous pulmonary venous return (PAPVR) implemenation:
+anomalous connection to the right atrium. The systemic arterial compartment was dashed
+for a better readability. The correct veins are in green, whereas the anomalous ones are
+highlighted in red.
+48
+3| Modelling of congenital diseases
+The lumped parameters of the superior vena cava are reported in Table 3.5 [6, 7].
+Table 3.5: Superior vena cava lumped parameters
+Parameter
+Value
+Unit of measure
+RSV C
+1.68 × 10−2
+mmHg s ml−1
+CSV C
+1
+ml mmHg−1
+LSV C
+1.5 × 10−3
+mmHg s2 ml−1
+Figure 3.3:
+Partial anomalous pulmonary venous return (PAPVR) implemenation:
+anomalous connection to the superior vena cava.
+The systemic arterial compartment
+was dashed for a better readability. The correct veins are in green, whereas the anoma-
+lous ones are highlighted in red.
+3| Modelling of congenital diseases
+49
+3.3.
+ASD/VSD: model calibration
+The atrial and ventricular septal defects were modeled as two resistors that link respec-
+tively the two atria and the two ventricles.
+We treid to use the resistance Equation 3.8 of the electrical-emodynamic analogy to esti-
+mate the defects resistance.
+The resulting resistance however, were too small compared to values found in literature
+[8–11]. For example by considering a small atrial defect of radius RASD = 3mm, using
+the atrial septal thickness as vessel length l = 2.5mm, the resulting resistance would be
+RASD = 3.71 × 10−2. The physical implications of this small value of resistance would be
+an elevated blood shunt and, as a consequence, a pressure match between the two atria.
+This result is quite unrealistic for a small defect and therefore this formula was deemed
+as unreliable to estimate the septa defects resistance.
+The lumped parameters of the model have been calibrated for three different patients
+hospitalized at IRCCS Policlinico San Donato in Milan Italy.
+All the patients are adult males: the first one present an atrial septal defect (ASD), the
+second one a ventricular septal defect (V SD) and the third one has both septal defects
+(ASD + V SD).
+The clinical data for the VSD patient were measured under standard conditions and dur-
+ing the administration of vasodilators (V SD + V D).
+50
+3| Modelling of congenital diseases
+Table 3.6: Patients clinical data
+Clinical data
+ASD
+V SD
+V SD + V D
+ASD + V SD
+Units of measure
+pmean
+RA
+15
+15
+15
+13
+mmHg
+pmax
+RV
+48
+−
+−
+100
+mmHg
+pmin
+RV
+15
+−
+−
+12
+mmHg
+PAPmax
+50
+88
+90
+99
+mmHg
+PAPmin
+20
+33
+35
+49
+mmHg
+PAPmean
+30
+55
+35
+70
+mmHg
+PWPmean
+17
+30
+33
+11
+mmHg
+pmax
+LV
+98
+−
+−
+117
+mmHg
+pmin
+LV
+17
+−
+−
+7
+mmHg
+SAPmax
+98
+75
+75
+102
+mmHg
+SAPmin
+70
+48
+48
+72
+mmHg
+SAPmean
+85
+55
+68
+86
+mmHg
+QP
+7.86
+2.44
+5.96
+5.48
+l × min−1
+QS
+3.09
+2.44
+1.53
+5.48
+l × min−1
+PV R
+1.65
+10.25
+5.2
+10.76
+WU
+In ASD presence the affected equations are the two regulating the atrial volumes. By
+defining the shunting blood flow as positive if moving from the left to the right atrium,
+the equations become:
+
+
+
+
+
+
+
+dVRA
+dt
+= QSY S
+V EN −QTV (pRA, pRV ) −QASD(pLA, pRA)
+dVLA
+dt
+= QPUL
+V EN −QMV (pLA, pLV ) + QASD(pLA, pRA)
+(3.15)
+In the same fashion in VSD presence the affected equations are the two involving the
+ventricular volumes, they result:
+
+
+
+
+
+
+
+dVRV
+dt
+= QTV (pRA, pRV ) −QPV (pRV , pPUL
+AR ) + QV SD(pLV , pRV )
+dVLV
+dt
+= QMV (pLA, pLV ) −QPV (pLV , pSY S
+AR ) −QV SD(pLV , pRV )
+(3.16)
+When the patient presents both ASD and VSD all the four chamber volume equations
+must be modified according to 3.15 and 3.16.
+3| Modelling of congenital diseases
+51
+In the Figure 3.4, the introduction of the two resistances modeling septal defects is
+depicted. Depending on the patient under study, it can be added either or both the atrial
+and the ventricular resistances.
+Figure 3.4: ASD and VSD addition to the 0D lumped-parameters model. The systemic
+and pulmonary arterial compartments were dashed for a better readability.
+The total Sobol’ indices were used to pinpoint the model parameters allowed to vary in
+the patient calibration. Setting a threshold of 0.1 we identified EA
+LV , EV
+LV , EA
+RV , EB
+RV ,
+52
+3| Modelling of congenital diseases
+RSY S
+AR , CSY S
+AR , RSY S
+V EN, RPUL
+V EN. In addition, also RPUL
+AR
+was allowed to vary by computing it
+at each step as the difference between the measured Pulmonary Vascular Resistance PV R
+and the sum of the pulmonary venous resistance with the equivalent capillary resistance.
+The healthy range parameters contained in Table 3.3 were used as initial guess of the
+calibration process.
+pmean
+RA
+pmax
+RV
+pmin
+RV
+pmax
+PA
+pmin
+PA
+pmean
+PA
+pPUL
+V EN
+pmax
+LV
+pmin
+LV
+pmax
+AO
+pmin
+AO
+EA
+LA
+1.8 · 10−5
+1.9 · 10−4
+7.8 · 10−5
+2.0 · 10−4
+3.8 · 10−4
+2.9 · 10−4
+2.1 · 10−4
+4.0 · 10−4
+1.6 · 10−4
+4.0 · 10−4
+2.8 · 10−4
+EB
+LA
+8.8 · 10−5
+2.2 · 10−3
+7.8 · 10−4
+2.3 · 10−3
+4.3 · 10−3
+3.3 · 10−3
+2.3 · 10−2
+1.5 · 10−3
+4.5 · 10−3
+1.5 · 10−3
+1.0 · 10−3
+V 0
+LA
+1.1 · 10−7
+8.3 · 10−7
+4.1 · 10−7
+8.2 · 10−7
+8.3 · 10−7
+8.6 · 10−7
+8.7 · 10−7
+1.2 · 10−6
+4.3 · 10−7
+1.2 · 10−6
+1.0 · 10−6
+EA
+LV
+1.3 · 10−3
+7.9 · 10−3
+2.9 · 10−3
+8.3 · 10−3
+1.7 · 10−2
+1.2 · 10−2
+1.2 · 10−1
+4.5 · 10−2
+5.2 · 10−1
+4.5 · 10−2
+2.9 · 10−2
+EB
+LV
+3.8 · 10−4
+1.0 · 10−2
+3.5 · 10−3
+1.1 · 10−2
+2.0 · 10−2
+1.5 · 10−2
+1.2 · 10−1
+1.4 · 10−2
+2.9 · 10−1
+1.4 · 10−2
+9.8 · 10−3
+V 0
+LV
+4.5 · 10−7
+2.0 · 10−6
+1.2 · 10−6
+2.0 · 10−6
+1.9 · 10−6
+2.0 · 10−6
+2.1 · 10−6
+2.8 · 10−6
+1.1 · 10−6
+2.8 · 10−6
+2.5 · 10−6
+EA
+RA
+8.9 · 10−4
+7.1 · 10−4
+1.3 · 10−3
+7.2 · 10−4
+6.5 · 10−4
+7.1 · 10−4
+5.5 · 10−4
+4.1 · 10−4
+3.5 · 10−4
+4.1 · 10−4
+3.4 · 10−4
+EB
+RA
+6.4 · 10−3
+2.6 · 10−3
+4.8 · 10−3
+2.5 · 10−3
+2.3 · 10−3
+2.5 · 10−3
+1.6 · 10−3
+1.4 · 10−3
+2.7 · 10−4
+1.4 · 10−3
+7.9 · 10−4
+V 0
+RA
+3.7 · 10−7
+2.5 · 10−6
+1.6 · 10−6
+2.5 · 10−6
+2.8 · 10−6
+2.7 · 10−6
+3.2 · 10−6
+4.5 · 10−6
+1.6 · 10−6
+4.5 · 10−6
+3.9 · 10−6
+EA
+RV
+2.3 · 10−2
+4.9 · 10−2
+4.2 · 10−1
+4.9 · 10−2
+4.5 · 10−2
+4.8 · 10−2
+3.9 · 10−2
+3.2 · 10−2
+1.7 · 10−2
+3.2 · 10−2
+2.4 · 10−2
+EB
+RV
+2.7 · 10−2
+1.5 · 10−2
+2.6 · 10−1
+1.5 · 10−2
+1.2 · 10−2
+1.3 · 10−2
+8.9 · 10−3
+7.2 · 10−3
+1.9 · 10−3
+7.2 · 10−3
+4.5 · 10−3
+V 0
+RV
+1.7 · 10−6
+1.5 · 10−5
+8.0 · 10−6
+1.5 · 10−5
+1.7 · 10−5
+1.6 · 10−5
+2.0 · 10−5
+2.6 · 10−5
+1.1 · 10−5
+2.6 · 10−5
+2.3 · 10−5
+Rmin
+3.6 · 10−4
+2.0 · 10−3
+5.1 · 10−4
+1.4 · 10−4
+1.2 · 10−4
+1.3 · 10−4
+5.4 · 10−4
+2.8 · 10−4
+8.9 · 10−4
+4.2 · 10−4
+2.3 · 10−4
+Rmax
+2.0 · 10−9
+9.1 · 10−10
+2.8 · 10−10
+2.6 · 10−10
+2.0 · 10−10
+2.2 · 10−10
+1.3 · 10−9
+6.8 · 10−10
+5.4 · 10−10
+1.1 · 10−9
+4.9 · 10−10
+RSY S
+AR
+1.8 · 10−3
+6.2 · 10−3
+2.9 · 10−3
+6.1 · 10−3
+6.3 · 10−3
+6.4 · 10−3
+2.2 · 10−2
+4.6 · 10−1
+1.1 · 10−1
+4.6 · 10−1
+6.7 · 10−1
+CSY S
+AR
+3.1 · 10−4
+2.2 · 10−3
+6.6 · 10−4
+2.2 · 10−3
+2.7 · 10−3
+2.5 · 10−3
+8.6 · 10−3
+1.2 · 10−1
+2.5 · 10−2
+1.2 · 10−1
+1.0 · 10−1
+LSY S
+AR
+6.6 · 10−12
+2.9 · 10−11
+1.2 · 10−11
+3.0 · 10−11
+5.5 · 10−11
+4.2 · 10−11
+3.9 · 10−10
+3.8 · 10−8
+1.3 · 10−9
+3.7 · 10−8
+2.8 · 10−9
+RSY S
+C
+2.5 · 10−6
+1.0 · 10−5
+4.5 · 10−6
+9.8 · 10−6
+9.5 · 10−6
+9.7 · 10−6
+3.1 · 10−5
+6.3 · 10−4
+1.4 · 10−4
+6.3 · 10−4
+9.2 · 10−4
+CSY S
+C
+1.8 · 10−6
+5.5 · 10−6
+3.7 · 10−6
+5.4 · 10−6
+5.8 · 10−6
+5.9 · 10−6
+5.1 · 10−6
+6.5 · 10−6
+2.0 · 10−6
+6.5 · 10−6
+5.4 · 10−6
+RSY S
+V EN
+6.4 · 10−2
+8.2 · 10−1
+3.4 · 10−1
+8.1 · 10−1
+7.4 · 10−1
+8.0 · 10−1
+5.6 · 10−1
+4.0 · 10−1
+1.2 · 10−1
+4.0 · 10−1
+2.5 · 10−1
+CSY S
+V EN
+6.1 · 10−3
+3.8 · 10−2
+1.8 · 10−2
+3.8 · 10−2
+3.5 · 10−2
+3.8 · 10−2
+3.0 · 10−2
+4.4 · 10−2
+1.2 · 10−2
+4.4 · 10−2
+4.1 · 10−2
+LSY S
+V EN
+1.6 · 10−10
+5.7 · 10−11
+3.0 · 10−11
+5.8 · 10−11
+5.1 · 10−11
+5.5 · 10−11
+4.9 · 10−11
+5.2 · 10−11
+7.8 · 10−12
+5.2 · 10−11
+4.1 · 10−11
+RPUL
+AR
+2.3 · 10−3
+7.8 · 10−2
+2.8 · 10−2
+8.7 · 10−2
+9.6 · 10−2
+9.8 · 10−2
+6.9 · 10−3
+8.0 · 10−3
+2.1 · 10−3
+8.0 · 10−3
+5.9 · 10−3
+CPUL
+AR
+1.4 · 10−3
+5.2 · 10−2
+1.0 · 10−2
+6.1 · 10−2
+4.1 · 10−2
+3.5 · 10−3
+3.0 · 10−3
+3.2 · 10−3
+8.2 · 10−4
+3.2 · 10−3
+2.5 · 10−3
+LPUL
+AR
+3.39 · 10−10
+1.87 · 10−08
+1.02 · 10−09
+9.05 · 10−09
+6.72 · 10−10
+1.40 · 10−10
+1.44 · 10−10
+9.82 · 10−11
+2.27 · 10−11
+9.72 · 10−11
+5.06 · 10−11
+RPUL
+C
+4.96 · 10−04
+1.78 · 10−02
+5.56 · 10−03
+1.85 · 10−02
+3.32 · 10−02
+2.61 · 10−02
+4.85 · 10−03
+5.15 · 10−03
+1.34 · 10−03
+5.12 · 10−03
+4.09 · 10−03
+CPUL
+C
+9.43 · 10−05
+1.10 · 10−03
+4.38 · 10−04
+1.09 · 10−03
+1.71 · 10−03
+1.12 · 10−03
+1.57 · 10−03
+2.23 · 10−03
+5.47 · 10−04
+2.22 · 10−03
+1.95 · 10−03
+RSH
+6.14 · 10−04
+2.34 · 10−02
+7.23 · 10−03
+2.43 · 10−02
+4.35 · 10−02
+3.43 · 10−02
+4.64 · 10−03
+5.58 · 10−03
+1.60 · 10−03
+5.55 · 10−03
+4.76 · 10−03
+CSH
+9.71 · 10−09
+1.25 · 10−07
+3.95 · 10−08
+1.31 · 10−07
+1.43 · 10−07
+8.38 · 10−08
+1.16 · 10−07
+1.52 · 10−07
+3.76 · 10−08
+1.51 · 10−07
+1.26 · 10−07
+RPUL
+V EN
+5.11 · 10−04
+1.33 · 10−02
+4.37 · 10−03
+1.39 · 10−02
+2.73 · 10−02
+2.02 · 10−02
+1.61 · 10−01
+1.36 · 10−02
+3.44 · 10−03
+1.35 · 10−02
+1.02 · 10−02
+CPUL
+V EN
+7.07 · 10−04
+2.73 · 10−03
+1.79 · 10−03
+2.73 · 10−03
+3.11 · 10−03
+2.99 · 10−03
+5.53 · 10−03
+8.08 · 10−03
+2.23 · 10−03
+8.04 · 10−03
+7.24 · 10−03
+LPUL
+V EN
+4.69 · 10−10
+1.34 · 10−09
+2.77 · 10−10
+1.42 · 10−09
+3.53 · 10−09
+2.32 · 10−09
+2.37 · 10−08
+8.32 · 10−09
+4.47 · 10−08
+8.31 · 10−09
+6.87 · 10−09
+Table 3.7: Total Sobol’ indices for the model lumped-parameters by considering the avail-
+able clinical data as model outputs.
+53
+4| Numerical simulations
+4.1.
+Patent foramen ovale results
+In this subsection we review the results obtained by introducing the patent foramen ovale
+in the lumped-parameter model.
+According to the pulmonary compartment constriction introduced, the pulmonary arterial
+resistance and inductance increase, whereras its capacitance decreases.
+All these three parameter changes make the right heart struggle more to pump blood. As
+a consequence, its chamber pressures increase and in particular the right atrium pressure
+exceeds the left one during the atrial relaxation, opening the foramen, Figure 4.1.
+Figure 4.1: Pulmonary arterial constriction simulated in an adult male without the foramen.
+As it can be seen from the Figure 4.2(a), increasing the radius of the foramen leads to
+an increase in the right-to-left shunt phenomenon. More blood is pushed from the right
+atrium to the left atrium within each cardiac cycle. The blood volume passed to the
+left ventricle, which is subsequently pumped into the systemic circulation, increases. In
+contrast the right ventricle lose more blood as the orifice gets bigger and, as a direct
+consequence pumps less blood into the pulmonary circulation.
+Less blood is getting
+54
+4| Numerical simulations
+oxygenated in the lungs.
+The ratio between the medium flow of the pulmonary circulation and that of the systemic
+circulation QP/QS, decreases accordingly (Table 4.1). The two circulation medium flows
+are calculated as:
+
+
+
+
+
+
+
+QP =
+R
+0 THBQPV (t)dt
+THB
+QS =
+R
+0 THBQAV (t)dt
+THB
+(4.1)
+(a)
+(b)
+Figure 4.2: Foramen model simulations: (a) Shunting blood flow curve varying the orifice radius;
+(b)Shunting blood flow curve varying the regurgitation factor
+Table 4.1: Foramen model results
+Foramen radius
+QP
+QS
+rsmall = 5.0 mm
+0.9598
+rmedium = 9.0 mm
+0.9442
+rlarge = 13.0 mm
+0.9438
+4| Numerical simulations
+55
+By increasing the regurgitation factor MREG the backflow shunt (left to right) expands,
+Figure 4.2(b). The one directionality nature of the valve is preserved. In fact, left to right
+pressure gradients (during different parts of the heartbeat) are considerably bigger than
+right to left ones, but in the prediction of the model the regurgitating backflow (left to
+right) keeps smaller than the right to left allowed normally by the foramen.
+4.2.
+PAPVR: atrium case results
+In this subsection we review the results of the model implementing the PAPVR for the
+atrium case. The curves of the flowing blood through the anomalous veins are almost
+identical in single and double anomalous veins cases.
+By integrating these curves it results that the blood volume flowed in a heartbeat through
+the anomalous veins V HB
+V EIN slightly decreases moving from the single to the doubles case.
+In contrast with this behaviour, both the blood flow and the volume passed through the
+anomalous veins increase a lot in the three anomalous veins scenario, Figure 4.3.
+Figure 4.3: Anomalous vein blood flow curves.
+As a direct consequence, if the passing volumes in the anomalous veins are only increasing
+or just slightly decreasing, the shunting phenomenon to the right atrium escalates with
+the growing number of anomalous veins.
+This can be confirmed by the different shunt measures reported in the Table 4.2. QSHUNT
+represents the total blood flow moving from the lungs to the right atrium through the
+56
+4| Numerical simulations
+anomalous veins:
+QSHUNT =
+Nj
+X
+j=1
+QPUL
+V EIN,j
+(4.2)
+Table 4.2: PAPVR: atrium case shunt measures
+Case
+QP
+QS
+QSHUNT
+CO
+V HB
+V EIN [ml]
+1 anomalous vein
+1.3362
+0.3451
+20.83
+2 anomalous veins
+1.7276
+0.7380
+20.7
+3 anomalous veins
+2.5696
+1.5756
+25.1
+The right ventricle gets progressively overloaded by increasing the anomalous veins num-
+ber. It gets filled by more blood, received by the lungs, and as a consequence its pressure
+rises.
+In contrast the left ventricle is deprived of the blood it should receive, and consequently
+its blood volume and pressure decrease, Figure 4.4.
+(a)
+(b)
+Figure 4.4: PAPVR atrium case simulation: (a) right ventricular pressure volume loop; (b)left ventricu-
+lar pressure volume loop
+4| Numerical simulations
+57
+The increased blood volume coming from the right ventricle puts under stress all the
+pulmonary circulation vessels, straining them and potentially, damaging them.
+4.3.
+PAPVR: superior vena cava case results
+In this subsection we review the results of the model implementing the PAPVR for the
+superior vena cava case. As in the atrium case the curves of the flowing blood through
+the anomalous veins are almost identical in single and double anomalous veins cases.
+In this case, however, the blood volume flowed in a heartbeat through the anomalous
+veins, obtained by integrating over a heartbeat the blood flow curves, slightly increase
+moving from the single to the double case.
+As in the atrium case, both the blood flow and the volume passed through the anomalous
+veins increase a lot in the three anomalous veins scenario.
+Figure 4.5: Anomalous vein blood flow curves.
+The shunting measures globally decreases with respect to the atrium case, Tables 4.2 4.3.
+This result was expected because by ascending the systemic venous system the pressure
+is naturally higher.
+58
+4| Numerical simulations
+Case
+QP
+QS
+QSHUNT
+CO
+V HB
+V EIN [ml]
+1 anomalous vein
+1.2475
+0.2568
+15.16
+2 anomalous veins
+1.5467
+0.5576
+15.34
+3 anomalous veins
+2.2241
+1.2329
+19.31
+Table 4.3: PAPVR: superior vena cava case shunt measures
+As in the atrium case, by increasing the anomalous veins number, the right ventricle gets
+progressively overloaded, whereas the left ventricle receives less blood, Figure 4.6.
+(a)
+(b)
+Figure 4.6: PAPVR superior vena cava case simulation: (a) right ventricular pressure volume loop;
+(b)left ventricular pressure volume loop
+4| Numerical simulations
+59
+4.4.
+ASD patient
+In this subsection we review the results of the model calibration for the ASD patient.
+The obtained calibrated model for the ASD patient has a mean squared relative error of
+9.8 × 10−3. Although the calibrated model correctly gauges all the pressure, it slightly
+overestimates the circulation blood fluxes, Table 4.4.
+Table 4.4: Output comparison for ASD model calibration
+Acronym
+Clinical value
+Model output
+Units of measure
+pmean
+RA
+15
+18.36
+mmHg
+pmax
+RV
+45
+49.15
+mmHg
+pmin
+RV
+15
+12.26
+mmHg
+PAPmax
+50
+47.0
+mmHg
+PAPmin
+20
+19.63
+mmHg
+PAPmean
+30
+30.83
+mmHg
+PWPmean
+17
+18.76
+mmHg
+pmax
+LV
+98
+98.56
+mmHg
+pmin
+LV
+17
+14.07
+mmHg
+SAPmax
+97
+98.07
+mmHg
+SAPmin
+70
+69.9
+mmHg
+SAPmean
+85
+83.89
+mmHg
+QP
+7.86
+9.44
+l × min−1
+QS
+3.09
+3.73
+l × min−1
+Table 4.5: ASD patient: model parameters significant changes
+Acronym
+Healty reference
+ASD patient
+Units of measure
+RPUL
+AR
+0.0714
+0.079
+mmHg s ml−1
+RPUL
+V EN
+0.0375
+0.003
+mmHg s ml−1
+CPUL
+AR
+6.004
+3.095
+ml mmHg−1
+RSY S
+V EN
+0.3596
+0.2956
+ml mmHg−1
+EA
+LV
+2.70
+1.50
+ml−1
+EB
+LV
+0.069
+0.14
+ml−1
+EA
+RV
+0.43
+0.6
+ml−1
+EB
+RV
+0.041
+0.08
+ml−1
+60
+4| Numerical simulations
+It can be inferred from the measured PV R and from the calibrated pulmonary resistances
+(Table 4.5) that the patient has small to none significant damage to the pulmonary cir-
+culation vessels.
+The high ventricular maximal pressures are probably achieved in the calibration process
+by increasing the passive and active ventricular elastances, Table 4.5.
+The resulting atrial septal resistance is quite small, RASD = 1.25 × 10−4.
+As a consequence the septal defect offer no resistance and the atrial pressures match.
+The two atria works as one common chamber that receive blood from the two circulation
+venous systems and move it to the ventricles.
+Right ventricle receives additional blood coming from the right atrium and as a conse-
+quence its maximum pressure is outside its normal healthy range (15 −28 mmHg ).
+(a)
+(b)
+Figure 4.7: ASD patient chamber pressures: (a) atrial pressures; (b)ventricular pressures
+The ventricular volumes estimations are both particularly big, this can be explained by
+the patient’s high rightt ventricular Stroke Volume obtainable from the clinical data:
+RVSV = QP
+HR = 7.86l · min−1
+48min−1
+= 163.75ml
+(4.3)
+4| Numerical simulations
+61
+(a)
+(b)
+Figure 4.8: ASD patient ventricular P-V loops: (a) Right ventricle; (b) Left ventricle
+The calibrated model predicts some pulmonary venous blood flow return,Figure 4.9. This
+is a consequence of the low pulmonary venous resistance. Once the pulmonary venous
+capacitance has gave back the accumulated pressure in the systolic phase, the pulmonary
+venous pressure starts to drop. Meanwhile the left atrium gets filled with blood and as a
+consequence its pressure starts to rise. Once this pressure exceeds the pulmonary venous
+one, if the pulmonary venous resistance is low the blood can flow back into the lungs
+(Figure 4.11).
+62
+4| Numerical simulations
+Figure 4.9: ASD patient pulmonary flows.
+Figure 4.10: ASD patient systemic flows.
+4| Numerical simulations
+63
+Figure 4.11: ASD patient pulmonary pressures. The now common atria pressure was
+reported as pLA to highlight the pressures involved in the pulmonary venous return
+Figure 4.12: ASD patient systemic pressures.
+64
+4| Numerical simulations
+4.5.
+VSD patient
+In this subsection we review the results of the model calibration for the VSD patient.
+The obtained calibrated model for the VSD patient has a mean squared relative error of
+2.77 × 10−2. Although the model has almost correctly guessed all the pressures and the
+systemic flux, it has failed to correctly reproduce the pulmonary flux, Table 4.6.
+Table 4.6: Output comparison for VSD model calibration
+Acronym
+Clinical value
+Model output
+Units of measure
+pmean
+RA
+15
+13.84
+mmHg
+PAPmax
+88
+82.12
+mmHg
+PAPmin
+33
+37.52
+mmHg
+PAPmean
+55
+67.29
+mmHg
+PWPmean
+30
+29.3
+mmHg
+SAPmax
+75
+82
+mmHg
+SAPmin
+48
+45.23
+mmHg
+SAPmean
+55
+62.34
+mmHg
+QP
+2.44
+3.37
+l × min−1
+QS
+2.44
+2.52
+l × min−1
+Table 4.7: VSD patient: model parameters significant changes
+Acronym
+Healty reference
+V SD patient
+Units of measure
+RPUL
+AR
+0.0714
+0.382
+mmHg s ml−1
+RPUL
+V EN
+0.0375
+0.216
+mmHg s ml−1
+CPUL
+AR
+6.004
+0.8124
+ml mmHg−1
+RSY S
+V EN
+0.3596
+0.3408
+ml mmHg−1
+EA
+LV
+2.70
+2.569
+ml−1
+EB
+LV
+0.069
+0.086
+ml−1
+EA
+RV
+0.43
+0.716
+ml−1
+EB
+RV
+0.041
+0.35
+ml−1
+The resulting ventricular septal resistance is again quite small, RV SD = 8.75 × 10−3.
+As in the atrial case the septal defect offer no resistance and the ventricular pressures
+match (Figure 4.13). The two ventricles works as a single chamber that receive blood
+4| Numerical simulations
+65
+from the atria and push it in the systemic and pulmonary arterial compartments
+Consequently the left ventricular pressure is lower than usual, whereas the right one is
+higher. This result could be inquired by the available high PAPmax clinical data.
+Due to the high minimal right ventricular pressure, increased by the VSD, blood struggles
+to move downward from the right atrium to the right ventricle. As a consequence the
+right atrial mean pressure P mean
+RA
+is higher than in healthy patients (−1, 8 mmHg). The
+left to right ventricular shunt overloads the pulmonary circulation and as a consequence
+the left atrium.
+(a)
+(b)
+Figure 4.13: VSD patient chamber pressures: (a) atrial pressures; (b)ventricular pressures
+From the pressure-volume loops it can be clearly seen that the right ventricular minimal
+pressure is higher than in a normal healthy patient.
+As soon as the passive filling phase starts blood flows through the septal defect. This
+make the right ventricular pressure rise faster than in a healthy patient.
+In the same fashion in the ventricular contraction blood continues to move through the
+ventricles.
+The (almost) isobaric passive filling and the isovolumetric contraction, typical of the ven-
+tricular pressure volume, are no longer visible, especially in the right one.
+The right ventricle and pulmonary circulation overload, stimulate over time the body
+remodeling to rebalance the systemic and the pulmonary blood flows.
+As explained in Section 1.5 this is achieved through cellular proliferation in the pulmonary
+vessels, making them narrower and, as a consequence, increasing their resistance.
+The PV R clinical data and the calibrated pulmonary resistances are in fact, several times
+higher than the healthy ones.
+66
+4| Numerical simulations
+Another important consequence of this body adaptation is probably the important re-
+duction on CPUL
+AR . The overload repeatedly strained the pulmonary circulation vessels,
+making them lose their ability to stretch and dilate to store pressure as potential elastic
+energy. This could explain the big difference between the patient clinical data of maximal
+and minimal pulmonary arterial pressure.
+Due to the high blood volume moving to the right ventricle, it would be expected an
+important increase in the right ventricular end diastolic volume.
+From the pressure-volume loop, however, it is not possible to appreciate this expected
+behavior. The reason may lie in the opening time of the pulmonary valve. By comparing
+the flows through the pulmonary valves, it is possible to observe that, given the faster in-
+crease in pressure in the right ventricle due to blood shunting, the pulmonary valve opens
+earlier, effectively relieving the right ventricle and preventing overload , Figure 4.15.
+(a)
+(b)
+Figure 4.14: VSD patient ventricular P-V loops: (a) Right ventricle; (b) Left ventricle
+Figure 4.15: Flow through pulmonary valve comparison between VSD patient and healthy reference
+4| Numerical simulations
+67
+Due to the high minimal left and right atrial pressures for the reasons explained before,
+the distinction between ventricular passive filling and atrial contraction is more visible in
+the blood flows through the atrioventricular valves (PV and AV), (Figure 4.16, 4.17).
+Figure 4.16: VSD patient pulmonary flows.
+Figure 4.17: VSD patient systemic flows.
+68
+4| Numerical simulations
+Figure 4.18: VSD patient pulmonary pressures.
+Figure 4.19: VSD patient systemic pressures.
+4| Numerical simulations
+69
+4.6.
+VSD patient: VD administration (VSD/VD)
+In this subsection we review the results obtained in the model calibration for the VSD
+patient under vasodilatators administration. In this condition the obtained calibrated
+model for the VSD patient has a mean squared relative error of 1.10 × 10−2. Fixing the
+ventricular septal defect resistance obtained in the VSD patient model calibration, a sec-
+ond calibration using the available clinical data of the same patient under vasodilatators
+administration was performed.
+The calibrated model correctly guesses all the pressures except the maximum and mean
+pulmonary arterial ones, Table 4.8. The pulmonary circulation flow is lower that the
+available clinical data, but it is still more than two times higher than in the reference
+healthy condition (2.09l · min−1).
+The increase in pulmonary blood flow is probably due to the effect of vasodilators, which
+have significantly reduced pulmonary resistances, Table 4.9.
+Table 4.8: Output comparison for VSD/VD model calibration
+Acronym
+Clinical value
+Model output
+Units of measure
+pmean
+RA
+15
+15.41
+mmHg
+PAPmax
+90
+77.56
+mmHg
+PAPmin
+35
+33.73
+mmHg
+PAPmean
+64
+49.85
+mmHg
+PWPmean
+33
+32.60
+mmHg
+SAPmax
+75
+79.48
+mmHg
+SAPmin
+48
+43.41
+mmHg
+SAPmean
+68
+59.84
+mmHg
+QP
+5.96
+4.60
+l × min−1
+QS
+1.53
+1.29
+l × min−1
+The passive elastance of the left ventricle greatly increased, meanwhile the passive elas-
+tance of the right ventricle increased several times. These result will be discussed in the
+Section 4.7.
+70
+4| Numerical simulations
+Table 4.9: VSD/VD patient: model parameters significant changes
+Acronym
+Healty reference
+V SD/V D patient
+Units of measure
+RPUL
+AR
+0.0714
+0.152
+mmHg s ml−1
+RPUL
+V EN
+0.0375
+0.143
+mmHg s ml−1
+CPUL
+AR
+6.004
+0.81
+ml mmHg−1
+RSY S
+V EN
+0.3596
+0.493
+ml mmHg−1
+EA
+LV
+2.70
+1.92
+ml−1
+EB
+LV
+0.069
+0.109
+ml−1
+EA
+RV
+0.43
+0.575
+ml−1
+EB
+RV
+0.041
+0.336
+ml−1
+The increased pulmonary blood flow overloads the left atrium, considerably increasing
+its pressure Figure 4.20.
+As a consequence, the blood flow through the mitral valve increases, Figure 4.25.
+(a)
+(b)
+Figure 4.20: VSD/VD patient chamber pressures: (a) atrial pressures; (b)ventricular pressures
+The additional blood moved to the left atrium and subsequently to the left ventricle, is
+not visible on the left ventricular pressure-volume loop. In fact the left ventricular end
+diastolic volume is equal to the normal condition.
+The blood is probably moved immediately to the right ventricle through the septal defect,
+increasing the right ventricular end diastolic volume.
+4| Numerical simulations
+71
+Table 4.10: VSD patient: end diastolic volumes comparison
+V SD patient
+V SD/V D patient
+Unit
+LVEDV
+166.13
+165.65
+ml
+RVEDV
+115.37
+120.30
+ml
+(a)
+(b)
+Figure 4.21: VSD/VD patient ventricular P-V loops: (a) Right ventricle; (b) Left ventricle
+The arterial pulmonary blood flow clearly increased due to the lower pulmonary resis-
+tance under vasodilatators administration.
+72
+4| Numerical simulations
+Figure 4.22: VSD/VD patient pulmonary flows.
+Figure 4.23: VSD/VD patient systemic flows.
+4| Numerical simulations
+73
+Figure 4.24: VSD/VD patient pulmonary pressures.
+Figure 4.25: VSD/VD patient systemic pressures.
+74
+4| Numerical simulations
+4.7.
+ASD/VSD patient
+In this subsection we review the results of the model calibration for the ASD/VSD pa-
+tient.
+The obtained calibrated model for the ASD/VSD patient has a mean squared
+relative error of 4.81 × 10−2. As in the VSD calibration the model correctly estimate
+almost all the pressure except the mean pulmonary wedge pressure, which is clearly over-
+estimated. In this case the right atrial mean pressure is also overestimated. The model
+also fails to correctly estimate the blood flows of the pulmonary and systemic circulation
+,Table 4.11.
+Again, as in the VSD patient, it can be inferred from the measured PV R and from the cal-
+ibrated pulmonary resistances that the patient has significant damage to the pulmonary
+circulation vessels.
+CPUL
+AR
+is again severely decreased, following the VSD patient reasoning, it can explain the
+difference of 50 mmHg between the maximum and minimum pulmonary arterial pressure.
+The resulting septal defects resistances are RASD = 0.052 mmHg s ml−1 and RASD =
+0.0011 mmHg s ml−1. The ventricular pressure almost match, whereas the atrial one
+slightly differ. The ventricles work together as a common chamber receiving blood from
+the atria and pumping it into the systemic and pulmonary circulation. The right atrial
+pressure exceeds the left one, probably as a consequence of the incorrect estimation by
+the model of the circulation flows. Indeed, an higher systemic circulation implies more
+blood going to the right atrium, increasing, as a consequence, its pressure.
+4| Numerical simulations
+75
+Acronym
+Clinical value
+Model output
+Units of measure
+pmean
+RA
+13
+19.23
+mmHg
+pmax
+RV
+100
+110.24
+mmHg
+pmin
+RV
+12
+12.37
+mmHg
+PAPmax
+99
+109.00
+mmHg
+PAPmin
+49
+48.85
+mmHg
+PAPmean
+70
+74.86
+mmHg
+PWPmean
+11
+22
+mmHg
+pmax
+LV
+117
+106.85
+mmHg
+pmin
+LV
+7
+7.92
+mmHg
+SAPmax
+102
+105.16
+mmHg
+SAPmin
+72
+71.53
+mmHg
+SAPmean
+86
+88.39
+mmHg
+QP
+5.48
+3.50
+l × min−1
+QS
+5.48
+6.13
+l × min−1
+Table 4.11: Output comparison for ASD/VSD model calibration
+Table 4.12: ASD/VSD patient: model parameters significant changes
+Acronym
+Healty reference
+ASD/V SD patient
+Units of measure
+RPUL
+AR
+0.0714
+0.351
+mmHg s ml−1
+RPUL
+V EN
+0.0375
+0.05
+mmHg s ml−1
+CPUL
+AR
+6.004
+0.586
+ml mmHg−1
+RSY S
+V EN
+0.3596
+0.081
+ml mmHg−1
+EA
+LV
+2.70
+9.29
+ml−1
+EB
+LV
+0.069
+0.121
+ml−1
+EA
+RV
+0.43
+2.78
+ml−1
+EB
+RV
+0.041
+0.375
+ml−1
+The elastance parameters all increased several times.
+It is unclear if this is a consequence of the body remodelling caused by the abnormal
+cardiac circulation over the years or if it is a shortcut the calibration process used to
+correctly predict the maximal ventricular pressures. Indeed, both maximal ventricular
+pressures of the patient are considerably high, even more if considering that the pressure
+match achieved should have lowered the maximal left ventricular pressure.
+This pressure however is still perfectly in the healthy range (90-140 mmHg) for both VSD
+76
+4| Numerical simulations
+and ASD/VSD patients.
+(a)
+(b)
+Figure 4.26: ASD/VSD patient chamber pressures: (a) atrial pressures; (b)ventricular pressures
+In the right ventricular pressure-volume loop it can be clearly noted how the normally
+straight isovolumetric contraction is curved by the blood influx from the left ventricle.
+(a)
+(b)
+Figure 4.27: ASD/VSD patient ventricular P-V loops: (a) Right ventricle; (b) Left ventricle
+4| Numerical simulations
+77
+As in the VSD patient the right ventricular end diastolic volume doesn’t exceed the
+healthy one. Again the additional blood influx increase the right ventricular pressure,
+opening earlier the pulmonary valve and discharging a considerable blood flow in the
+pulmonary trunk.
+Figure 4.28: Flow through pulmonary valve comparison between ASD/VSD patient and
+healthy reference patient
+Figure 4.29: ASD/VSD patient pulmonary flows.
+78
+4| Numerical simulations
+Figure 4.30: ASD/VSD patient systemic flows.
+4| Numerical simulations
+79
+Figure 4.31: ASD/VSD patient pulmonary pressures.
+Figure 4.32: ASD/VSD patient systemic pressures.
+81
+5| Conclusions and future
+developments
+We implemented a model for the patent foramen ovale which correctly predicts the in-
+creasing shunt behaviour for larger orifice radius.
+The predicted shunt ratios are considerably close to the healthy reference value of 1, in
+which systemic and pulmonary circulation are perfectly balanced, suggesting a low impact
+on the cardiocirculatory system.
+In agreement with this result is the fact that a quarter of the world population present
+this condition and seem unaffected in their daily lives.
+As mentioned in the Section 1.2 the problems associated with this defect instead stem
+from the potential for paradoxical emboli to pass through it, thereby risking occlusion of
+systemic vessels and giving rise to a series of consequences.
+Considering the numerous patients affected by this disease, this model can be associated
+with the available data to improve the knowledge and data quality provided to a machine
+learning model, studying the patent foramen ovale, during its training phase.
+For the PAPVR, the implemented model correctly estimates the increasing shunt ratios
+by increasing the anomalous veins number and correctly see a shunt phenomenon decrease
+by considering attachment spot (such as the superior vena cava) placed upstream with
+respect to the right atrium.
+However, the model appears static, not allowing for other types of PAPVR or specific
+considerations regarding the individual case, such as the exact point of anomalous con-
+nection in the vessel or the type of connection itself. The model could be improved by
+a more thorough division of the pulmonary and systemic venous systems. This could in-
+volve considering the anatomical differences among the pulmonary veins, acknowledging
+their varying origin pressures due to the respective lungs they drain, and ultimately in-
+troducing more possibilities for anomalous connections, such as the brachiocephalic veins
+or the azygos vein.
+82
+5| Conclusions and future developments
+Calibrating the model that incorporates the septal defects resistances, allows for a fairly
+accurate reproduction of the patient’s cardiovascular system under treatment. Indeed the
+computed mean relative squared errors for the different patients are considerably small.
+This enables important estimations and considerations about their clinical conditions
+without resorting to highly invasive measurements. In particular, from the obtained re-
+sistances and capacitances we identified a significant damage on the pulmonary vessels in
+the two patients with the ventricular septal defect.
+However, the drawback of this implementation is the extremely lengthy calibration pro-
+cess (approx. 20 days), which is not compatible with the promptness and speed required
+in treating a patient. The calibration process took a considerable amount of time because
+the parameters can vary significantly, even by orders of magnitude, effectively enlarging
+the domain in which the method seeks a solution.
+A potential future development is the integration of a software or a trained machine learn-
+ing model into this calibration process. By taking the patient’s clinical data as input, this
+software/model could automatically provide a better initial guess for the calibration pro-
+cess.
+By studying the clinical data, as discussed retrospectively for the maximal and
+minimal pulmonary pressure in the Sections 4.4, 4.5, 4.6, 4.7, it becomes possible to
+investigate the patient’s physical condition and, consequently, gather prior information
+about their related lumped parameters.
+From the mathematical point of view, this procedure would make the starting point of the
+loss function closer to the relevant minima, consequently speeding up the calibration pro-
+cess and potentially making the minimization method avoid other incorrect local minima,
+now further away from the starting point
+83
+Bibliography
+[1] P. J. Blanco and R. A. Feijóo, “A 3d-1d-0d computational model for the entire car-
+diovascular system,” Mecánica Computacional, vol. 29, no. 59, pp. 5887–5911, 2010.
+[2] M. Hirschvogel, M. Bassilious, L. Jagschies, S. M. Wildhirt, and M. W. Gee, “A
+monolithic 3d-0d coupled closed-loop model of the heart and the vascular system:
+experiment-based parameter estimation for patient-specific cardiac mechanics,” In-
+ternational journal for numerical methods in biomedical engineering, vol. 33, no. 8,
+p. e2842, 2017.
+[3] F. Regazzoni, M. Salvador, P. C. Africa, M. Fedele, L. Dedè, and A. Quarteroni, “A
+cardiac electromechanical model coupled with a lumped-parameter model for closed-
+loop blood circulation,” Journal of Computational Physics, vol. 457, p. 111083, 2022.
+[4] J. Mynard, M. Davidson, D. Penny, and J. Smolich, “A simple, versatile valve model
+for use in lumped parameter and one-dimensional cardiovascular models,” Interna-
+tional Journal for Numerical Methods in Biomedical Engineering, vol. 28, no. 6-7,
+pp. 626–641, 2012.
+[5] X. Zhang, H. Haneishi, and H. Liu, “Impact of ductus arteriosus constriction and
+restrictive foramen ovale on global hemodynamics for term fetuses with d-tga,” In-
+ternational Journal for Numerical Methods in Biomedical Engineering, vol. 37, no. 11,
+p. e3231, 2021.
+[6] C. F. Babbs, J. C. Weaver, S. H. Ralston, and L. A. Geddes, “Cardiac, thoracic,
+and abdominal pump mechanisms in cardiopulmonary resuscitation: studies in an
+electrical model of the circulation,” The American journal of emergency medicine,
+vol. 2, no. 4, pp. 299–308, 1984.
+[7] A. Di Molfetta, G. Ferrari, R. Iacobelli, S. Filippelli, L. Fresiello, P. Guccione,
+A. Toscano, and A. Amodeo, “Application of a lumped parameter model to study the
+feasibility of simultaneous implantation of a continuous flow ventricular assist device
+(vad) and a pulsatile flow vad in bivad patients,” Artificial organs, vol. 41, no. 3,
+pp. 242–252, 2017.
+84
+| Bibliography
+[8] H. Tang, Z. Dai, M. Wang, B. Guo, S. Wang, J. Wen, and T. Li, “Lumped-parameter
+circuit platform for simulating typical cases of pulmonary hypertensions from point
+of hemodynamics,” Journal of cardiovascular translational research, vol. 13, pp. 826–
+852, 2020.
+[9] M. Korurek, M. Yildiz, A. Yüksel, and A. Şahin, “Simulation of eisenmenger syn-
+drome with ventricular septal defect using equivalent electronic system,” Cardiology
+in the Young, vol. 22, no. 3, pp. 301–306, 2012.
+[10] S. Shimizu, D. Une, T. Shishido, A. Kamiya, T. Kawada, S. Sano, and M. Sug-
+imachi, “Norwood procedure with non-valved right ventricle to pulmonary artery
+shunt improves ventricular energetics despite the presence of diastolic regurgitation:
+a theoretical analysis,” The journal of physiological sciences, vol. 61, pp. 457–465,
+2011.
+[11] A. Jalali, G. F. Jones, D. J. Licht, C. Nataraj, et al., “Application of mathematical
+modeling for simulation and analysis of hypoplastic left heart syndrome (hlhs) in
+pre-and postsurgery conditions,” BioMed research international, vol. 2015, 2015.
+[12] Wikipedia, “Conduction system of the hear.” https://commons.wikimedia.org/w/
+index.php?curid=10197958.
+[13] Wikipedia, “Diagram of the human heart.” https://commons.wikimedia.org/w/index.
+php?curid=830253.
+[14] Wikipedia, “Phases of the cardiac cycle.” https://commons.wikimedia.org/w/index.
+php?curid=30148227.
+[15] C. Contaldi, M.-A. Losi, A. Rapacciuolo, M. Prastaro, R. Lombardi, V. Parisi, L. S.
+Parrella, C. Di Nardo, A. Giamundo, R. Puglia, et al., “Percutaneous treatment of
+patients with heart diseases: selection, guidance and follow-up. a review,” Cardio-
+vascular ultrasound, vol. 10, no. 1, pp. 1–18, 2012.
+[16] L. Guo, “Partial anomalous pulmonary venous return.” https://www.osmosis.org/
+answers/interventricular-septum.
+[17] E. J. Schroeckenstein RF, Wasenda GJ, “Valvular competent patent foramen ovale
+in adults.,” Minn Med., vol. 55, p. 11–13, 1972 Jan.
+[18] R. Clarke, L. Daly, K. Robinson, E. Naughten, S. Cahalane, B. Fowler, and I. Gra-
+ham, “Hyperhomocysteinemia: an independent risk factor for vascular disease,” New
+england journal of medicine, vol. 324, no. 17, pp. 1149–1155, 1991.
+| Bibliography
+85
+[19] B. Miranda, A. C. Fonseca, and J. M. Ferro, “Patent foramen ovale and stroke,”
+Journal of Neurology, vol. 265, pp. 1943–1949, 2018.
+[20] A. Selzer and W. H. Carnes, “The role of pulmonary stenosis in the production of
+chronic cyanosis,” American Heart Journal, vol. 45, no. 3, pp. 382–395, 1953.
+[21] G. Kronik and H. Mösslacher, “Positive contrast echocardiography in patients with
+patent foramen ovale and normal right heart hemodynamics,” The American Journal
+of Cardiology, vol. 49, no. 7, pp. 1806–1809, 1982.
+[22] A. A. Alsheikh-Ali, D. E. Thaler, and D. M. Kent, “Patent foramen ovale in cryp-
+togenic stroke: incidental or pathogenic?,” Stroke, vol. 40, no. 7, pp. 2349–2355,
+2009.
+[23] H. Hara, T. K. Jones, E. R. Ladich, R. Virmani, D. C. Auth, J. E. Eichinger, R. J.
+Sommer, R. A. Van Tassel, and R. S. Schwartz, “Patent foramen ovale closure by
+radiofrequency thermal coaptation: first experience in the porcine model and healing
+mechanisms over time,” Circulation, vol. 116, no. 6, pp. 648–653, 2007.
+[24] H.
+Healtcare,
+“Patent
+foramen
+ovale.”
+https://hartfordhealthcare.org/
+services/heart-vascular/departments/structural-heart-disease-program/
+patent-foramen-ovale.
+[25] C. point foundation, “Partial anomalous pulmonary venous return.” http://www.
+pted.org/id=papvr.
+[26] B. F. Laya, M. J. Goske, S. Morrison, J. R. Reid, L. Swischuck, E. H. Ey, D. J.
+Murphy, M. Lieber, and N. Obuchowski, The accuracy of chest radiographs in the
+detection of congenital heart disease and in the diagnosis of specific congenital cardiac
+lesions, vol. 36. Springer, 2006.
+[27] P. M. Steele, V. Fuster, M. Cohen, D. Ritter, and D. McGoon, “Isolated atrial septal
+defect with pulmonary vascular obstructive disease–long-term follow-up and predic-
+tion of outcome after surgical correction.,” Circulation, vol. 76, no. 5, pp. 1037–1042,
+1987.
+[28] N. C. on Birth Defects, C. f. D. C. Developmental Disabilities, and Preven-
+tion., “Facts about atrial septal defect.” https://www.cdc.gov/ncbddd/heartdefects/
+atrialseptaldefect.html.
+[29] D. E. Spicer, H. H. Hsu, J. Co-Vu, R. H. Anderson, and F. J. Fricker, “Ventricular
+septal defect,” Orphanet journal of rare diseases, vol. 9, no. 1, pp. 1–16, 2014.
+86
+5| BIBLIOGRAPHY
+[30] N. C. on Birth Defects, C. f. D. C. Developmental Disabilities, and Prevention.,
+“Facts about ventricular septal defect.” https://www.cdc.gov/ncbddd/heartdefects/
+ventricularseptaldefect.html.
+[31] A. Tonini, C. Vergara, F. Regazzoni, L. Dede, R. Scrofani, C. Cogliati, and A. Quar-
+teroni, “A mathematical model to assess the effects of covid-19 on the cardiocircula-
+tory system,” 2023.
+[32] K. Sunagawa, K. Sagawa, and W. L. Maughan, “Ventricular interaction with the
+loading system,” Annals of biomedical engineering, vol. 12, pp. 163–189, 1984.
+[33] L. F. Shampine and M. W. Reichelt, “The matlab ode suite,” SIAM journal on
+scientific computing, vol. 18, no. 1, pp. 1–22, 1997.
+[34] R. H. Byrd, P. Lu, J. Nocedal, and C. Zhu, “A limited memory algorithm for bound
+constrained optimization,” SIAM Journal on scientific computing, vol. 16, no. 5,
+pp. 1190–1208, 1995.
+[35] Y. Sun, B. Sjoberg, P. Ask, D. Loyd, and B. Wranne, “Mathematical model that
+characterizes transmitral and pulmonary venous flow velocity patterns,” American
+Journal of Physiology-Heart and Circulatory Physiology, vol. 268, no. 1, pp. H476–
+H489, 1995.
+[36] C. Lee and L. Talbot, “A fluid-mechanical study of the closure of heart valves,”
+Journal of Fluid Mechanics, vol. 91, no. 1, pp. 41–63, 1979.
+[37] F. Wippermann, “On the fluid dynamics of the aortic valve,” Journal of Fluid Me-
+chanics, vol. 159, pp. 487–501, 1985.
+[38] A. P. Yoganathan, Z. He, and S. Casey Jones, “Fluid mechanics of heart valves,”
+Annu. Rev. Biomed. Eng., vol. 6, pp. 331–362, 2004.
+[39] G. Falanga, S. Carerj, G. Oreto, B. K. Khandheria, and C. Zito, “How to under-
+stand patent foramen ovale clinical significance: Part i,” Journal of Cardiovascular
+Echography, vol. 24, no. 4, p. 114, 2014.
+[40] V. C. Rideout, “Mathematical and computer modeling of physiological systems,”
+1991.
+87
+List of Figures
+1.1
+Cardiac anatomy: (a) a sketch of its eletrical network system (picture elaborated from
+[12]); (b) a sketch of the heart internal structure along with its main components (picture
+elaborated from [13]). All abbreviations are defined in table 1.1
+. . . . . . . . . . .
+3
+1.2
+Cardiac cycle phases: on the top, a sketch of the blood flow direction, the valve status
+and the contraction of the 4 chambers (darker in color) throughout the different phases
+(pictures elaborated from [14]); on the bottom, the ventricular pressure-volume loops
+and the valves status legenda. . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+6
+1.3
+Interatrial septal development (A-E) and PFO condition (F), image taken from [15]. . .
+7
+1.4
+Interventricular septum anatomy (image taken from [16]).
+. . . . . . . . . . . . . .
+8
+1.5
+Paradoxical embolus passage through a patent foramen ovale (image elaborated from
+[24]).
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+10
+1.6
+Anomalous pulmonary vein example: (a) RUPV normally drains into the left atrium ;
+(b) RUPV completely drains into SVC. (picture elaborated from [25]). Legend defined
+in table 1.2. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+11
+1.7
+Partial anomalous pulmonary venous return classification (image taken from [26]).
+. .
+12
+1.8
+Atrial septal defect (picture taken from [28]).
+. . . . . . . . . . . . . . . . . . . .
+13
+1.9
+Ventricular septal defect classification (picture taken from ([30]). . . . . . . . . . . .
+15
+2.1
+Single compartment circuit representation, legend i:input, o:output. Image
+taken from [1] . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+22
+2.2
+Lumped-parameter cardiocirculatory model. The system unkwnown pres-
+sures and flow rates are in red and blue, respectively, whereas the model
+parameters are in black. Image taken from [31] . . . . . . . . . . . . . . . .
+23
+3.1
+Patent foramen ovale (PFO) addition to the 0D lumped-parameters model.
+The new PFO compartment is highlighted with a green box. The systemic
+and pulmonary arterial compartments were dashed for a better readability.
+42
+88
+| List of Figures
+3.2
+Partial anomalous pulmonary venous return (PAPVR) implemenation: anoma-
+lous connection to the right atrium. The systemic arterial compartment
+was dashed for a better readability. The correct veins are in green, whereas
+the anomalous ones are highlighted in red. . . . . . . . . . . . . . . . . . .
+47
+3.3
+Partial anomalous pulmonary venous return (PAPVR) implemenation: anoma-
+lous connection to the superior vena cava. The systemic arterial compart-
+ment was dashed for a better readability. The correct veins are in green,
+whereas the anomalous ones are highlighted in red.
+. . . . . . . . . . . . .
+48
+3.4
+ASD and VSD addition to the 0D lumped-parameters model. The systemic
+and pulmonary arterial compartments were dashed for a better readability.
+51
+4.1
+Pulmonary arterial constriction simulated in an adult male without the foramen.
+. . .
+53
+4.2
+Foramen model simulations: (a) Shunting blood flow curve varying the orifice radius;
+(b)Shunting blood flow curve varying the regurgitation factor . . . . . . . . . . . . .
+54
+4.3
+Anomalous vein blood flow curves.
+. . . . . . . . . . . . . . . . . . . . . .
+55
+4.4
+PAPVR atrium case simulation: (a) right ventricular pressure volume loop; (b)left ven-
+tricular pressure volume loop . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+56
+4.5
+Anomalous vein blood flow curves.
+. . . . . . . . . . . . . . . . . . . . . .
+57
+4.6
+PAPVR superior vena cava case simulation: (a) right ventricular pressure volume loop;
+(b)left ventricular pressure volume loop . . . . . . . . . . . . . . . . . . . . . . .
+58
+4.7
+ASD patient chamber pressures: (a) atrial pressures; (b)ventricular pressures
+. . . . .
+60
+4.8
+ASD patient ventricular P-V loops: (a) Right ventricle; (b) Left ventricle . . . . . . .
+61
+4.9
+ASD patient pulmonary flows. . . . . . . . . . . . . . . . . . . . . . . . . .
+62
+4.10 ASD patient systemic flows. . . . . . . . . . . . . . . . . . . . . . . . . . .
+62
+4.11 ASD patient pulmonary pressures. The now common atria pressure was
+reported as pLA to highlight the pressures involved in the pulmonary venous
+return
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+63
+4.12 ASD patient systemic pressures. . . . . . . . . . . . . . . . . . . . . . . . .
+63
+4.13 VSD patient chamber pressures: (a) atrial pressures; (b)ventricular pressures
+. . . . .
+65
+4.14 VSD patient ventricular P-V loops: (a) Right ventricle; (b) Left ventricle . . . . . . .
+66
+4.15 Flow through pulmonary valve comparison between VSD patient and healthy reference .
+66
+4.16 VSD patient pulmonary flows. . . . . . . . . . . . . . . . . . . . . . . . . .
+67
+4.17 VSD patient systemic flows. . . . . . . . . . . . . . . . . . . . . . . . . . .
+67
+4.18 VSD patient pulmonary pressures. . . . . . . . . . . . . . . . . . . . . . . .
+68
+4.19 VSD patient systemic pressures. . . . . . . . . . . . . . . . . . . . . . . . .
+68
+4.20 VSD/VD patient chamber pressures: (a) atrial pressures; (b)ventricular pressures . . .
+70
+4.21 VSD/VD patient ventricular P-V loops: (a) Right ventricle; (b) Left ventricle . . . . .
+71
+| List of Figures
+89
+4.22 VSD/VD patient pulmonary flows.
+. . . . . . . . . . . . . . . . . . . . . .
+72
+4.23 VSD/VD patient systemic flows. . . . . . . . . . . . . . . . . . . . . . . . .
+72
+4.24 VSD/VD patient pulmonary pressures. . . . . . . . . . . . . . . . . . . . .
+73
+4.25 VSD/VD patient systemic pressures.
+. . . . . . . . . . . . . . . . . . . . .
+73
+4.26 ASD/VSD patient chamber pressures: (a) atrial pressures; (b)ventricular pressures . . .
+76
+4.27 ASD/VSD patient ventricular P-V loops: (a) Right ventricle; (b) Left ventricle
+. . . .
+76
+4.28 Flow through pulmonary valve comparison between ASD/VSD patient and
+healthy reference patient . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+77
+4.29 ASD/VSD patient pulmonary flows. . . . . . . . . . . . . . . . . . . . . . .
+77
+4.30 ASD/VSD patient systemic flows. . . . . . . . . . . . . . . . . . . . . . . .
+78
+4.31 ASD/VSD patient pulmonary pressures.
+. . . . . . . . . . . . . . . . . . .
+79
+4.32 ASD/VSD patient systemic pressures. . . . . . . . . . . . . . . . . . . . . .
+79
+91
+List of Tables
+1.1
+List of abbreviations. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+4
+1.2
+Venous system legend . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+12
+2.1
+Cardiac phases characteristic times. . . . . . . . . . . . . . . . . . . . . . .
+19
+2.2
+Model parameters abbreviations.
+. . . . . . . . . . . . . . . . . . . . . . .
+20
+2.3
+Computable patient quantities . . . . . . . . . . . . . . . . . . . . . . . . .
+25
+2.4
+Butcher tableau for Runge-Kutta methods . . . . . . . . . . . . . . . . . .
+27
+2.5
+Butcher tableau for Embedded Runge-Kutta methods . . . . . . . . . . . .
+27
+2.6
+Butcher tableau for Dorman-Prince method
+. . . . . . . . . . . . . . . . .
+28
+2.7
+L-BFGS-B Optimization Algorithm . . . . . . . . . . . . . . . . . . . . . .
+34
+3.1
+Foramen model parameters . . . . . . . . . . . . . . . . . . . . . . . . . . .
+41
+3.2
+Foramen radius . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+41
+3.3
+Healty male adult lumped-parameters . . . . . . . . . . . . . . . . . . . . .
+43
+3.4
+Constricted pulmonary artery parameters . . . . . . . . . . . . . . . . . . .
+44
+3.5
+Superior vena cava lumped parameters . . . . . . . . . . . . . . . . . . . .
+48
+3.6
+Patients clinical data . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+50
+3.7
+Total Sobol’ indices for the model lumped-parameters by considering the
+available clinical data as model outputs.
+. . . . . . . . . . . . . . . . . . .
+52
+4.1
+Foramen model results . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+54
+4.2
+PAPVR: atrium case shunt measures . . . . . . . . . . . . . . . . . . . . .
+56
+4.3
+PAPVR: superior vena cava case shunt measures . . . . . . . . . . . . . . .
+58
+4.4
+Output comparison for ASD model calibration . . . . . . . . . . . . . . . .
+59
+4.5
+ASD patient: model parameters significant changes . . . . . . . . . . . . .
+59
+4.6
+Output comparison for VSD model calibration . . . . . . . . . . . . . . . .
+64
+4.7
+VSD patient: model parameters significant changes . . . . . . . . . . . . .
+64
+4.8
+Output comparison for VSD/VD model calibration
+. . . . . . . . . . . . .
+69
+4.9
+VSD/VD patient: model parameters significant changes . . . . . . . . . . .
+70
+4.10 VSD patient: end diastolic volumes comparison
+. . . . . . . . . . . . . . .
+71
+4.11 Output comparison for ASD/VSD model calibration . . . . . . . . . . . . .
+75
+92
+| List of Tables
+4.12 ASD/VSD patient: model parameters significant changes . . . . . . . . . .
+75
+93
+Acknowledgements
+I want to sincerely express my gratitude to my Advisor Luca Dedè for the gratifying and
+stimulating opportunity to work with him on this thesis project. Your encouragement
+was of upmost importance in completing this work in time. That "keep on going like this,
+Giulio" message was perhaps the only moment when i felt truly gratified for my efforts
+by the university environment.
+I would also like to deeply thanks my Co-advisor Andrea Tonini, your assistance, prompt-
+ness, and invaluable advice have been indispensable throughout the working process. Your
+willingness to help, even during evenings and weekends, was really appreciated. Thank
+you so much.
+Lastly, I would also like to express my gratitude to my co-advisor, Paolo Ferrero, who
+took time out of its schedule, shortly after the birth of a child, to assist me and provide
+insightful tips.
