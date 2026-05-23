@@ -1,0 +1,169 @@
+# =============================================================================
+#  .gitignore — unified_vsd
+#  MATLAB Cardiovascular Simulation Project
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+#  Editor / IDE
+# -----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# -----------------------------------------------------------------------------
+#  Python virtual environment (used for tooling, not the MATLAB code itself)
+# -----------------------------------------------------------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+# -----------------------------------------------------------------------------
+#  MATLAB generated files
+# -----------------------------------------------------------------------------
+*.asv          # Auto-save backup files
+*.m~           # Emacs backup
+*.mex*         # Compiled MEX files (platform-specific, must be recompiled)
+octave-workspace
+slprj/         # Simulink build artifacts
+*.slxc         # Simulink cache
+
+# -----------------------------------------------------------------------------
+#  Large binary result files (store externally, document path in README.md)
+#  Per AGENTS.md §12.3: .mat files > 10 MB must not be committed
+# -----------------------------------------------------------------------------
+results/figures/*.png
+results/figures/*.jpg
+results/figures/*.eps
+results/tables/*.xlsx
+results/tables/*.csv
+
+# Keep vector PDF figures — these ARE committed (publication outputs)
+# results/figures/*.pdf  ← intentionally NOT ignored
+
+# Large .mat data files — exclude by size heuristic (all .mat in results/)
+results/**/*.mat
+
+# Calibration/GSA output dumps (can be regenerated)
+results/calibration_*.mat
+results/gsa_*.mat
+results/sobol_*.mat
+
+# -----------------------------------------------------------------------------
+#  Patient clinical data — NEVER commit without documented authorization
+#  Per AGENTS.md §12.3 and §9.2
+# -----------------------------------------------------------------------------
+data/
+patient_data/
+clinical_records/
+*_clinical_raw.*
+*_patient_data.*
+*_identifiable.*
+
+# -----------------------------------------------------------------------------
+#  PDF files (papers, drafts — use a reference manager instead)
+# -----------------------------------------------------------------------------
+*.pdf
+
+# -----------------------------------------------------------------------------
+#  Operating system noise
+# -----------------------------------------------------------------------------
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+
+# -----------------------------------------------------------------------------
+#  Temporary / scratch files
+# -----------------------------------------------------------------------------
+*.tmp
+*.temp
+*.bak
+*.orig
+*.log
+*.out
+*.aux
+*.fdb_latexmk
+*.fls
+
+# Scratch MATLAB scripts (naming convention for exploratory work)
+scratch_*.m
+test_scratch*.m
+debug_*.m
+temp_*.m
+
+# -----------------------------------------------------------------------------
+#  Compressed archives (use releases for distributing)
+# -----------------------------------------------------------------------------
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+Toolbox/
+toolbox/
+
+# -----------------------------------------------------------------------------
+#  AI agent workspace — Cursor / Claude internal directories
+#  These contain agent transcripts, worktrees, and tool state.
+#  Large, regenerable, and not part of the scientific codebase.
+# -----------------------------------------------------------------------------
+.claude/
+.cursor/
+.assistant/
+
+# -----------------------------------------------------------------------------
+#  Patient-specific config files — never commit without authorization
+#  Per AGENTS.md §12.3 and §9.2
+#  patient_template.m IS committed (it has only NaN fields — no patient data).
+#  Any file matching patient_*.m except patient_template.m is patient data.
+# -----------------------------------------------------------------------------
+config/patient_*.m
+!config/patient_template.m
+
+# -----------------------------------------------------------------------------
+#  MATLAB session logs generated during runs
+# -----------------------------------------------------------------------------
+*.log
+matlab_*.log
+
+# -----------------------------------------------------------------------------
+#  Runtime result directories that are fully regenerable
+# -----------------------------------------------------------------------------
+src/results/
+
+# -----------------------------------------------------------------------------
+#  GSA checkpoint files — large, regenerable
+#  Kept under results/gsa/ which is already covered by results/**/*.mat,
+#  but explicit here for clarity.
+# -----------------------------------------------------------------------------
+results/gsa/*.mat
+
+# -----------------------------------------------------------------------------
+#  PDF figures — these are large generated outputs; keep only source code
+#  (Uncomment the line below if you want to stop tracking PDF figures)
+# -----------------------------------------------------------------------------
+# results/figures/*.pdf
+
+# -----------------------------------------------------------------------------
+#  Generated simulation outputs
+#  Keep the directory placeholders, but do not commit regenerated run artifacts.
+# -----------------------------------------------------------------------------
+results/**
+!results/
+!results/figures/
+!results/tables/
+!results/figures/.gitkeep
+!results/tables/.gitkeep

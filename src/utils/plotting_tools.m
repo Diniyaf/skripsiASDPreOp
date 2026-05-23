@@ -1,0 +1,241 @@
+function plotting_tools(sim, params, tag, scenario, varargin)
+% PLOTTING_TOOLS
+% -----------------------------------------------------------------------
+% Generate publication-quality haemodynamic plots from a steady-state
+% simulation.  Plots are scenario-aware (pre/post surgery annotations).
+%
+% INPUTS:
+%   sim      - struct from integrate_system.m  (.t, .V)
+%   params   - parameter struct (from apply_scaling + params_from_clinical)
+%   tag      - string label appended to figure titles, e.g. 'Baseline'
+%   scenario - 'pre_surgery' | 'post_surgery'   (controls annotations)
+%
+% PLOTS GENERATED (all exported as vector PDF, Guardrail §11.3):
+%   1. Four-chamber pressure traces  (RA, RV, LA, LV)
+%   2. Four-vessel pressure traces   (SAR, SVEN, PAR, PVEN)
+%   3. LV and RV pressure-volume loops
+%   4. VSD shunt flow  Q_VSD(t)  (pre-surgery only)
+%   5. Pulmonary valve flow  Q_PVv(t)
+%
+% OUTPUT FILES:
+%   <ResultsDir>/ChamberPressures_<tag>_<scenario>.pdf
+%   <ResultsDir>/VascularPressures_<tag>_<scenario>.pdf
+%   <ResultsDir>/PVLoops_<tag>_<scenario>.pdf
+%   <ResultsDir>/VSDShuntFlow_<tag>_<scenario>.pdf   (pre-surgery only)
+%   <ResultsDir>/PulmValveFlow_<tag>_<scenario>.pdf
+%
+% ASSUMPTIONS:
+%   - All figures are publication-size: 16×12 cm, Arial 11 pt (Guardrail §11.1).
+%   - Axes labelled with units in parentheses.
+%   - Exported as vector PDF (never PNG, Guardrail §11.3).
+%
+% AUTHOR:   Unified VSD Model
+% DATE:     2026-02-26
+% VERSION:  1.1
+% -----------------------------------------------------------------------
+
+t  = sim.t(:);
+XV = sim.V;
+
+opts = parse_plot_options(varargin{:});
+fig_dir = opts.ResultsDir;
+if ~exist(fig_dir, 'dir'), mkdir(fig_dir); end
+
+%% Extract last cycle
+T_HB = 60 / params.HR;     % [s]  cardiac period
+T1   = t(end);
+T0   = T1 - T_HB;
+time_mask = (t >= T0) & (t <= T1);
+tc   = t(time_mask);        % [s]  trimmed time axis
+
+%% Reconstruct signals (inline helper below)
+[P, Q] = signals_for_plot(tc, XV(time_mask,:), params);
+
+lw = 1.8;   % [pt]  line width — publication standard
+
+%% Helper: apply publication axes style (Guardrail §11.1)
+% (Called after each plot command)
+function style_axes(ax)
+    set(ax, 'FontSize', 10, 'FontName', 'Arial', 'Box', 'on', ...
+            'TickDir', 'out', 'LineWidth', 0.8);
+end
+
+function h = std_fig(fig_name)
+    h = figure('Name', fig_name, 'Color', 'w', 'NumberTitle', 'off', ...
+               'Units', 'centimeters', 'Position', [2 2 16 12]);
+end
+
+function export_fig(fig_handle, fig_dir, filename)
+    out_path = fullfile(fig_dir, [filename '.pdf']);
+    exportgraphics(fig_handle, out_path, 'ContentType', 'vector', 'Resolution', 300);
+    fprintf('[plotting_tools] Saved: %s\n', out_path);
+end
+
+%% ---- 1. Chamber pressures -------------------------------------------
+fig1_name = sprintf('ChamberPressures_%s_%s', tag, scenario);
+fig1 = std_fig(fig1_name);
+
+subplot(2,2,1);
+plot(tc, P.RA, 'b', 'LineWidth', lw);
+xlabel('Time (s)',        'FontSize', 11, 'FontName', 'Arial');
+ylabel('P_{RA} (mmHg)',  'FontSize', 11, 'FontName', 'Arial');
+title('Right Atrium',     'FontSize', 12, 'FontName', 'Arial');
+style_axes(gca); grid on;
+
+subplot(2,2,2);
+plot(tc, P.RV, 'r', 'LineWidth', lw);
+xlabel('Time (s)',        'FontSize', 11, 'FontName', 'Arial');
+ylabel('P_{RV} (mmHg)',  'FontSize', 11, 'FontName', 'Arial');
+title('Right Ventricle',  'FontSize', 12, 'FontName', 'Arial');
+style_axes(gca); grid on;
+
+subplot(2,2,3);
+plot(tc, P.LA, 'b--', 'LineWidth', lw);
+xlabel('Time (s)',        'FontSize', 11, 'FontName', 'Arial');
+ylabel('P_{LA} (mmHg)',  'FontSize', 11, 'FontName', 'Arial');
+title('Left Atrium',      'FontSize', 12, 'FontName', 'Arial');
+style_axes(gca); grid on;
+
+subplot(2,2,4);
+plot(tc, P.LV, 'r--', 'LineWidth', lw);
+xlabel('Time (s)',        'FontSize', 11, 'FontName', 'Arial');
+ylabel('P_{LV} (mmHg)',  'FontSize', 11, 'FontName', 'Arial');
+title('Left Ventricle',   'FontSize', 12, 'FontName', 'Arial');
+style_axes(gca); grid on;
+
+sgtitle(sprintf('Chamber Pressures — %s | %s', tag, scenario), ...
+        'FontSize', 13, 'FontName', 'Arial', 'FontWeight', 'bold');
+export_fig(fig1, fig_dir, fig1_name);
+
+%% ---- 2. Vascular pressures -----------------------------------------
+fig2_name = sprintf('VascularPressures_%s_%s', tag, scenario);
+fig2 = std_fig(fig2_name);
+
+plot(tc, P.SAR,  'k',   'LineWidth', lw, 'DisplayName', 'SAR (systemic artery)');
+hold on;
+plot(tc, P.SVEN, 'b',   'LineWidth', lw, 'DisplayName', 'SVEN (systemic vein)');
+plot(tc, P.PAR,  'r',   'LineWidth', lw, 'DisplayName', 'PAR (pulmonary artery)');
+plot(tc, P.PVEN, 'm--', 'LineWidth', lw, 'DisplayName', 'PVEN (pulmonary vein)');
+xlabel('Time (s)',          'FontSize', 11, 'FontName', 'Arial');
+ylabel('Pressure (mmHg)',   'FontSize', 11, 'FontName', 'Arial');
+title(sprintf('Vascular Pressures — %s | %s', tag, scenario), ...
+      'FontSize', 12, 'FontName', 'Arial');
+legend('FontSize', 10, 'FontName', 'Arial', 'Location', 'best');
+style_axes(gca); grid on;
+export_fig(fig2, fig_dir, fig2_name);
+
+%% ---- 3. PV loops ---------------------------------------------------
+sidx    = params.idx;
+V_LV_c  = XV(time_mask, sidx.V_LV);   % [mL]  (Guardrail §7.1)
+V_RV_c  = XV(time_mask, sidx.V_RV);   % [mL]
+
+fig3_name = sprintf('PVLoops_%s_%s', tag, scenario);
+fig3 = std_fig(fig3_name);
+
+subplot(1,2,1);
+plot(V_LV_c, P.LV, 'r', 'LineWidth', lw);
+xlabel('V_{LV} (mL)',                'FontSize', 11, 'FontName', 'Arial');
+ylabel('P_{LV} (mmHg)',              'FontSize', 11, 'FontName', 'Arial');
+title('LV Pressure-Volume Loop',     'FontSize', 12, 'FontName', 'Arial');
+style_axes(gca); grid on;
+
+subplot(1,2,2);
+plot(V_RV_c, P.RV, 'b', 'LineWidth', lw);
+xlabel('V_{RV} (mL)',                'FontSize', 11, 'FontName', 'Arial');
+ylabel('P_{RV} (mmHg)',              'FontSize', 11, 'FontName', 'Arial');
+title('RV Pressure-Volume Loop',     'FontSize', 12, 'FontName', 'Arial');
+style_axes(gca); grid on;
+
+sgtitle(sprintf('PV Loops — %s | %s', tag, scenario), ...
+        'FontSize', 13, 'FontName', 'Arial', 'FontWeight', 'bold');
+export_fig(fig3, fig_dir, fig3_name);
+
+%% ---- 4. VSD shunt flow (pre-surgery only) ---------------------------
+if strcmp(scenario, 'pre_surgery')
+    fig4_name = sprintf('VSDShuntFlow_%s_%s', tag, scenario);
+    fig4 = std_fig(fig4_name);
+    plot(tc, Q.VSD, 'g', 'LineWidth', lw);
+    xlabel('Time (s)',      'FontSize', 11, 'FontName', 'Arial');
+    ylabel('Q_{VSD} (mL/s)', 'FontSize', 11, 'FontName', 'Arial');
+    title(sprintf('VSD Shunt Flow (positive = L\\rightarrowR) — %s', tag), ...
+          'FontSize', 12, 'FontName', 'Arial');
+    yline(0, 'k--', 'LineWidth', 1);
+    style_axes(gca); grid on;
+    export_fig(fig4, fig_dir, fig4_name);
+end
+
+%% ---- 5. Pulmonary valve flow ----------------------------------------
+fig5_name = sprintf('PulmValveFlow_%s_%s', tag, scenario);
+fig5 = std_fig(fig5_name);
+plot(tc, Q.PVv, 'b', 'LineWidth', lw);
+xlabel('Time (s)',        'FontSize', 11, 'FontName', 'Arial');
+ylabel('Q_{PVv} (mL/s)', 'FontSize', 11, 'FontName', 'Arial');
+title(sprintf('Pulmonary Valve Flow — %s | %s', tag, scenario), ...
+      'FontSize', 12, 'FontName', 'Arial');
+yline(0, 'k--', 'LineWidth', 1);
+style_axes(gca); grid on;
+export_fig(fig5, fig_dir, fig5_name);
+
+end  % plotting_tools
+
+function opts = parse_plot_options(varargin)
+% PARSE_PLOT_OPTIONS â€” parse optional output directory.
+root_dir = fileparts(fileparts(mfilename('fullpath')));   % project root
+parser = inputParser;
+parser.FunctionName = mfilename;
+addParameter(parser, 'ResultsDir', fullfile(root_dir, 'results', 'figures'), ...
+    @(x) ischar(x) || isstring(x));
+parse(parser, varargin{:});
+opts = parser.Results;
+opts.ResultsDir = char(opts.ResultsDir);
+end
+
+% =========================================================================
+%  LOCAL HELPER
+% =========================================================================
+
+function [P, Q] = signals_for_plot(tc, XV, params)
+% SIGNALS_FOR_PLOT — rebuild P and Q arrays from a trimmed state window
+%   Returns P and Q structs for an already-trimmed time+state window.
+%   Uses params.idx for state access (Guardrail §7.1).
+%   P fields [mmHg]: RA, RV, LA, LV, SAR, SVEN, PAR, PVEN
+%   Q fields [mL/s]: TV, PVv, MV, AV, SVEN, PVEN, VSD
+
+sidx = params.idx;   % state index struct
+
+V_RA   = XV(:, sidx.V_RA);      % [mL]
+V_RV   = XV(:, sidx.V_RV);      % [mL]
+V_LA   = XV(:, sidx.V_LA);      % [mL]
+V_LV   = XV(:, sidx.V_LV);      % [mL]
+V_SAR  = XV(:, sidx.V_SAR);     % [mL]
+V_SVEN = XV(:, sidx.V_SVEN);    % [mL]
+Q_SVEN = XV(:, sidx.Q_SVEN);    % [mL/s]
+V_PAR  = XV(:, sidx.V_PAR);     % [mL]
+V_PVEN = XV(:, sidx.V_PVEN);    % [mL]
+Q_PVEN = XV(:, sidx.Q_PVEN);    % [mL/s]
+
+[E_LV, E_RV, E_LA, E_RA] = elastance_model(tc, params);
+
+P_RA   = max(E_RA .* (V_RA - params.V0.RA), -5);            % [mmHg]
+P_RV   = E_RV .* (V_RV - params.V0.RV);                     % [mmHg]
+P_LA   = max(E_LA .* (V_LA - params.V0.LA), -5);            % [mmHg]
+P_LV   = E_LV .* (V_LV - params.V0.LV);                     % [mmHg]
+
+P_SAR  = (V_SAR  - params.V0.SAR)  ./ params.C.SAR;         % [mmHg]
+P_SVEN = max((V_SVEN - params.V0.SVEN) ./ params.C.SVEN, -5); % [mmHg]
+P_PAR  = (V_PAR  - params.V0.PAR)  ./ params.C.PAR;         % [mmHg]
+P_PVEN = max((V_PVEN - params.V0.PVEN) ./ params.C.PVEN, -5); % [mmHg]
+
+P.RA = P_RA; P.RV = P_RV;
+P.LA = P_LA; P.LV = P_LV;
+P.SAR = P_SAR; P.SVEN = P_SVEN;
+P.PAR = P_PAR; P.PVEN = P_PVEN;
+
+Q.TV   = valve_model(P_RA, P_RV,  params);                  % [mL/s]
+Q.PVv  = valve_model(P_RV, P_PAR, params);                  % [mL/s]
+Q.MV   = valve_model(P_LA, P_LV,  params);                  % [mL/s]
+Q.AV   = valve_model(P_LV, P_SAR, params);                  % [mL/s]
+Q.VSD  = vsd_shunt_model(P_LV, P_RV, params);               % [mL/s] positive = L→R
+Q.SVEN = Q_SVEN;                                             % [mL/s]
+Q.PVEN = Q_PVEN;                                             % [mL/s]
+end  % signals_for_plot
