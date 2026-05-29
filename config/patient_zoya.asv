@@ -1,4 +1,4 @@
-function clinical = patient_template()
+function clinical = patient_zoya()
 % PATIENT_TEMPLATE
 % -----------------------------------------------------------------------
 % Unified clinical data input struct for the ASD lumped-parameter model.
@@ -42,15 +42,12 @@ clinical = struct();
 %% =====================================================================
 %  COMMON - patient demographics, measured for any scenario
 %% =====================================================================
-clinical.common.age_years  = NaN;   % [years] patient age at measurement
-clinical.common.weight_kg  = NaN;   % [kg]
-clinical.common.height_cm  = NaN;   % [cm]
-clinical.common.sex        = NaN;   % [-] 0=female, 1=male
-clinical.common.BSA        = NaN;   % [m^2] leave NaN to compute by Mosteller
-clinical.common.HR         = NaN;   % [bpm] resting heart rate
-clinical.common.patient_name = '';  % [char] patient label for run folders and reports
-clinical.common.patient_id   = '';  % [char] optional identifier / MRN-safe alias
-clinical.common.maturation_mode = 'normal';   % 'normal' | 'pvr_fixed_day3' | 'pvr_fixed_day30' | 'none'
+clinical.common.age_years  = 7.07;   % [years] patient age at measurement
+clinical.common.weight_kg  = 18.2;   % [kg]
+clinical.common.height_cm  = 119;   % [cm]
+clinical.common.sex        = 0;   % [-] 0=female, 1=male
+clinical.common.BSA        = 0.788;   % [m^2] leave NaN to compute by Mosteller
+clinical.common.HR         = 90;   % [bpm] resting heart rate
 
 %% =====================================================================
 %  PRE-SURGERY - haemodynamics in the presence of an open ASD
@@ -59,8 +56,7 @@ clinical.common.maturation_mode = 'normal';   % 'normal' | 'pvr_fixed_day3' | 'p
 pre = struct();
 
 % ---- ASD shunt geometry / severity ------------------------------------
-pre.ASD_mode          = 'linear_bidirectional';   % 'linear_bidirectional' | 'orifice_bidirectional'
-pre.ASD_diameter_mm   = NaN;   % [mm]     atrial septal defect diameter
+pre.ASD_diameter_mm   = 19.25;   % [mm]     atrial septal defect diameter
 pre.ASD_area_mm2      = NaN;   % [mm^2]   defect area if measured/planimetered
 pre.ASD_gradient_mmHg = NaN;   % [mmHg]   LA-to-RA pressure gradient
 pre.Q_shunt_Lmin      = NaN;   % [L/min]  net ASD shunt flow, positive = left-to-right

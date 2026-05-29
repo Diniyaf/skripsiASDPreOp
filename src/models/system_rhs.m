@@ -5,7 +5,7 @@ function dXdt = system_rhs(t, X, params)
 %
 % Implements the full lumped-parameter model for a 4-chamber heart with
 % biventricular function, RLC systemic and pulmonary circuits, and an
-% optional ventricular septal defect (VSD) shunt.
+% optional atrial septal defect (ASD) shunt.
 %
 % INPUTS:
 %   t       - current time                                  [s]
@@ -42,8 +42,8 @@ function dXdt = system_rhs(t, X, params)
 %                                         dV/dt = Q_in – Q_out
 %   Valves     : Valenti Eq. (2.6)       smooth tanh diode (inlined)
 %   Pulm. cap  : Valenti Eq. (2.7)       dP_PC/dt = (Q_PAR – Q_COX – Q_CNO)/C_PC
-%   VSD shunt  :                          Q_VSD = (P_LV – P_RV) / R_vsd
-%                                         R.vsd >> large  ↔  post-surgery (closed)
+%   ASD shunt  :                          Q_ASD = f(P_LA - P_RA)
+%                                         R.asd = Inf means closed healthy baseline
 %
 % ASSUMPTIONS:
 % - Atrial pressures (P_RA, P_LA) are clamped to > -5 mmHg during integration.
@@ -58,18 +58,18 @@ function dXdt = system_rhs(t, X, params)
 %   - R_SC_half and C_PC_total are precomputed once in integrate_system.m and
 %     stored in params to avoid per-call division/addition.
 %   - elastance_model() loops replaced with vectorised logical indexing.
-%   - VSD shunt kept as vsd_shunt_model() call (smooth tanh, single call).
+%   - ASD shunt kept as asd_shunt_model() call (single reduced-order model call).
 %
 % SIGN CONVENTIONS:
 %   All flows are positive in the physiologically forward direction.
-%   Q_VSD positive = LV→RV (left-to-right shunt).
+%   Q_ASD positive = LA->RA (left-to-right atrial shunt).
 %
 % REFERENCES:
 %   [1] Valenti (2023). Thesis. Eqs. 2.1–2.7, Table 3.3.
 %
-% AUTHOR:   Unified VSD Model
-% DATE:     2026-04-14
-% VERSION:  2.0  (inlined valves, precomputed constants, vectorised elastance)
+% AUTHOR:   Unified ASD Model
+% DATE:     2026-05-28
+% VERSION:  3.0  (ASD LA-RA shunt coupling)
 % -----------------------------------------------------------------------
 
 % --- Unpack state index struct (Guardrail §7.1: never hardcode indices) ---
@@ -135,11 +135,10 @@ dP_AV  = P_LV  - P_SAR;                                 % Aortic:     LV → SAR
 g_AV   = 0.5 + 0.5 * tanh(dP_AV  / eps_v);
 Q_AV   = dP_AV  * (g_AV  * inv_Ro + (1 - g_AV)  * inv_Rc);
 
-% --- VSD shunt: LV ↔ RV  ------------------------------------------------
-% Q_VSD > 0  ≡  left-to-right shunt (L→R, physiologically typical for VSD)
-% When params.R.vsd is very large (post-surgery), Q_VSD ≈ 0.
-% Smooth-diode gate prevents reverse shunt; see vsd_shunt_model.m for rationale.
-Q_VSD = vsd_shunt_model(P_LV, P_RV, params);
+% --- ASD shunt: LA <-> RA  ----------------------------------------------
+% Q_ASD > 0 means left-to-right atrial shunt (LA -> RA).
+% With params.R.asd = Inf, the healthy baseline remains a closed circuit.
+Q_ASD = asd_shunt_model(P_LA, P_RA, params);
 
 % =====================================================================
 %  SYSTEMIC CIRCUIT  (Eq. 2.5)
@@ -186,12 +185,12 @@ dV_PVEN = Q_COX + Q_CNO - Q_PVEN;
 
 % =====================================================================
 %  CARDIAC CHAMBER VOLUME DERIVATIVES
-%  VSD shunt: +Q_VSD into RV, -Q_VSD from LV
+%  ASD shunt: +Q_ASD into RA, -Q_ASD from LA
 % =====================================================================
-dV_RA = Q_SVEN  - Q_TV;
-dV_RV = Q_TV    + Q_VSD  - Q_PVv;
-dV_LA = Q_PVEN  - Q_MV;
-dV_LV = Q_MV    - Q_AV   - Q_VSD;
+dV_RA = Q_SVEN  + Q_ASD - Q_TV;
+dV_RV = Q_TV    - Q_PVv;
+dV_LA = Q_PVEN  - Q_MV  - Q_ASD;
+dV_LV = Q_MV    - Q_AV;
 
 % --- Assemble output via index struct (Guardrail §7.1) -------------------
 dXdt = zeros(14, 1);

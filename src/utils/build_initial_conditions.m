@@ -30,10 +30,18 @@ src = struct();
 if ~isempty(clinical) && isstruct(clinical)
     if isfield(clinical, scenario)
         src = clinical.(scenario);
-    elseif strcmp(scenario, 'pre_surgery') && isfield(clinical, 'pre_surgery')
-        src = clinical.pre_surgery;
-    elseif strcmp(scenario, 'post_surgery') && isfield(clinical, 'post_surgery')
-        src = clinical.post_surgery;
+    elseif any(strcmp(scenario, {'pre_surgery', 'pre_closure'}))
+        if isfield(clinical, 'pre_closure')
+            src = clinical.pre_closure;
+        elseif isfield(clinical, 'pre_surgery')
+            src = clinical.pre_surgery;
+        end
+    elseif any(strcmp(scenario, {'post_surgery', 'post_closure'}))
+        if isfield(clinical, 'post_closure')
+            src = clinical.post_closure;
+        elseif isfield(clinical, 'post_surgery')
+            src = clinical.post_surgery;
+        end
     end
 end
 
@@ -118,6 +126,10 @@ end
 function Q_init = initial_flow_seed(params, src, V_LV_ed)
 if isfield(src, 'CO_Lmin') && ~isnan(src.CO_Lmin)
     Q_init = src.CO_Lmin * params.conv.Lmin_to_mLs;
+    return;
+end
+if isfield(src, 'Qs_Lmin') && ~isnan(src.Qs_Lmin)
+    Q_init = src.Qs_Lmin * params.conv.Lmin_to_mLs;
     return;
 end
 

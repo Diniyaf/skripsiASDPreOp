@@ -79,6 +79,22 @@ the code. The alternative adult Mosteller value from `70 kg, 175 cm`
 (`1.8447 m^2`) is documented as a comparison value, not the active code
 reference.
 
+### Healthy baseline reference profiles
+
+The current healthy-baseline comparison keeps both the original Hafiz/Keisya
+pediatric reference child and the Zoya patient-specific reference. These are
+baseline scaling inputs only; no ASD disease fields are used in this phase.
+
+| Label | Source file | age_years | weight_kg | height_cm | BSA | HR handling |
+|---|---|---:|---:|---:|---:|---|
+| `Reyna_ReferenceChild` | `config/reference_reyna.m` | 3.17 | 14.0 | 98.0 | 0.6173419726 | scaled by Zhang/Lundquist |
+| `Zoya_ReferencePatient` | `config/patient_zoya.m`, `clinical.common` only | 7.07 | 18.2 | 119.0 | 0.788 | scaled first, then `clinical.common.HR = 90 bpm` override |
+
+For Zoya healthy-baseline validation, fields under `clinical.pre_surgery`
+and `clinical.post_surgery` are intentionally ignored. In particular,
+`ASD_diameter_mm`, `QpQs = 3.79`, and other ASD scenario fields are reserved
+for the later ASD disease simulation stage.
+
 ---
 
 ## PRE-SURGERY  —  `clinical.pre_surgery`

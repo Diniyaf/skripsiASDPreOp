@@ -1,11 +1,14 @@
 function [P, Q] = reconstruct_hemodynamic_signals(t, XV, params)
 % RECONSTRUCT_HEMODYNAMIC_SIGNALS
 % -----------------------------------------------------------------------
-% Reconstructs pressure and flow signals from the 14-state model.
+% Reconstructs pressure and flow signals from the 14-state ASD model.
 %
-% AUTHOR:   Unified VSD Model
-% DATE:     2026-04-28
-% VERSION:  1.0
+% FLOW OUTPUTS:
+%   Q.ASD - ASD shunt flow [mL/s], positive = LA -> RA.
+%
+% AUTHOR:   Unified ASD Model
+% DATE:     2026-05-28
+% VERSION:  1.1
 % -----------------------------------------------------------------------
 
 sidx = params.idx;
@@ -38,6 +41,6 @@ Q.MV = valve_model(P.LA, P.LV, params);
 Q.AV = valve_model(P.LV, P.SAR, params);
 Q.SVEN = Q_SVEN;
 Q.PVEN = Q_PVEN;
-Q.VSD = vsd_shunt_model(P.LV, P.RV, params);
+Q.ASD = asd_shunt_model(P.LA, P.RA, params);
 
 end

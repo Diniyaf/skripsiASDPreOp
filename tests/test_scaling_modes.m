@@ -14,9 +14,8 @@
 clear; clc;
 root = fileparts(mfilename('fullpath'));
 project_root = fullfile(root, '..');
-addpath(genpath(project_root));
-addpath(fullfile(project_root, 'src', 'utils'), '-begin');
-addpath(fullfile(project_root, 'config'), '-begin');
+addpath(fullfile(project_root, 'config'));
+addpath(genpath(fullfile(project_root, 'src')));
 
 fprintf('==========================================\n');
 fprintf('  UNIFIED VSD MODEL - Scaling Mode Test\n');
@@ -26,14 +25,7 @@ n_pass = 0;
 n_fail = 0;
 
 params_ref = default_parameters();
-clinical = patient_reyna();
-patient = struct( ...
-    'age_years', clinical.common.age_years, ...
-    'age_days', clinical.common.age_years * 365.25, ...
-    'weight_kg', clinical.common.weight_kg, ...
-    'height_cm', clinical.common.height_cm, ...
-    'sex', clinical.common.sex, ...
-    'BSA', clinical.common.BSA);
+patient = reference_reyna();
 
 %% Test 1: Explicit modes are selectable.
 fprintf('--- Test 1: Explicit scaling modes ---\n');
@@ -65,7 +57,22 @@ else
 end
 
 %% Test 3: Wrapper accepts environment override.
-fprintf('--- Test 3: apply_scaling environment override ---\n');
+fprintf('--- Test 3: Zhang exponent checks ---\n');
+w = patient.weight_kg / 70;
+expected_Rvalve_open = params_ref.Rvalve.open * w^-0.50;
+expected_L_SAR = params_ref.L.SAR * w^-1.00;
+if abs(params_zhang.Rvalve.open - expected_Rvalve_open) < tolerance && ...
+        abs(params_zhang.L.SAR - expected_L_SAR) < tolerance && ...
+        isfield(params_zhang.scaling.zhang_exponents, 'L')
+    fprintf('  [PASS] Zhang valve and inertance scaling match corrected exponents.\n');
+    n_pass = n_pass + 1;
+else
+    fprintf('  [FAIL] Zhang corrected scaling exponents are not applied.\n');
+    n_fail = n_fail + 1;
+end
+
+%% Test 4: Wrapper accepts environment override.
+fprintf('--- Test 4: apply_scaling environment override ---\n');
 old_mode = getenv('UNIFIED_VSD_SCALING_MODE');
 setenv('UNIFIED_VSD_SCALING_MODE', 'lundquist_bsa');
 params_wrapped = apply_scaling(params_ref, patient);
@@ -78,8 +85,8 @@ else
     n_fail = n_fail + 1;
 end
 
-%% Test 4: Wrapper default now prefers Lundquist BSA.
-fprintf('--- Test 4: apply_scaling default mode ---\n');
+%% Test 5: Wrapper default now prefers Lundquist BSA.
+fprintf('--- Test 5: apply_scaling default mode ---\n');
 setenv('UNIFIED_VSD_SCALING_MODE', '');
 params_default = apply_scaling(params_ref, patient);
 setenv('UNIFIED_VSD_SCALING_MODE', old_mode);

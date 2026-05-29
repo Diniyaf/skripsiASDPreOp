@@ -46,10 +46,10 @@ function sim = integrate_system(params)
 %   reducing Jacobian evaluation cost by ~78% per step.
 %
 %   Pattern derived analytically from system_rhs.m state dependencies:
-%     Row 1  (dV_RA):   [1 2 9]          — Q_TV(P_RA,P_RV), Q_SVEN
-%     Row 2  (dV_RV):   [1 2 4 10]       — Q_TV, Q_VSD(P_LV,P_RV), Q_PVv(P_RV,P_PAR)
-%     Row 3  (dV_LA):   [3 4 14]         — Q_MV(P_LA,P_LV), Q_PVEN
-%     Row 4  (dV_LV):   [2 3 4 5]        — Q_MV, Q_AV(P_LV,P_SAR), Q_VSD
+%     Row 1  (dV_RA):   [1 2 3 9]        — Q_TV(P_RA,P_RV), Q_ASD(P_LA,P_RA), Q_SVEN
+%     Row 2  (dV_RV):   [1 2 10]         — Q_TV, Q_PVv(P_RV,P_PAR)
+%     Row 3  (dV_LA):   [1 3 4 14]       — Q_ASD(P_LA,P_RA), Q_MV(P_LA,P_LV), Q_PVEN
+%     Row 4  (dV_LV):   [3 4 5]          — Q_MV, Q_AV(P_LV,P_SAR)
 %     Row 5  (dV_SAR):  [4 5 6]          — Q_AV, Q_SAR
 %     Row 6  (dQ_SAR):  [5 6 7]          — P_SAR, Q_SAR, P_SC
 %     Row 7  (dV_SC):   [6 7 8]          — Q_SAR, P_SC, P_SVEN
@@ -81,9 +81,9 @@ function sim = integrate_system(params)
 %   [2] system_rhs.m — ODE right-hand side.
 %   [3] Guardrail §8.1–8.3 — solver choice and convergence requirements.
 %
-% AUTHOR:   Unified VSD Model
-% DATE:     2026-04-14
-% VERSION:  2.0  (JPattern + batch integration + relaxed MaxStep)
+% AUTHOR:   Unified ASD Model
+% DATE:     2026-05-28
+% VERSION:  2.1  (ASD JPattern + batch integration + relaxed MaxStep)
 % -----------------------------------------------------------------------
 
 T_HB  = 60 / params.HR;           % cardiac cycle period  [s]
@@ -102,10 +102,10 @@ params.inv_Rvalve_closed = 1 / params.Rvalve.closed;
 %  JACOBIAN SPARSITY PATTERN
 % =====================================================================
 JP = sparse(14, 14);
-JP(1,  [1  2  9])    = 1;   % dV_RA
-JP(2,  [1  2  4  10])= 1;   % dV_RV
-JP(3,  [3  4  14])   = 1;   % dV_LA
-JP(4,  [2  3  4  5]) = 1;   % dV_LV
+JP(1,  [1  2  3  9]) = 1;   % dV_RA
+JP(2,  [1  2  10])   = 1;   % dV_RV
+JP(3,  [1  3  4  14])= 1;   % dV_LA
+JP(4,  [3  4  5])    = 1;   % dV_LV
 JP(5,  [4  5  6])    = 1;   % dV_SAR
 JP(6,  [5  6  7])    = 1;   % dQ_SAR
 JP(7,  [6  7  8])    = 1;   % dV_SC
@@ -147,6 +147,7 @@ flow_abs_fallback = 0.1;   % [mL/s] absolute fallback when current flow peak is 
 peak_prev  = zeros(1, 14);
 ss_reached = false;
 t_last = []; V_last = [];
+t_phase_origin = 0;   % [s] absolute cycle boundary used for phase-aligned output time
 
 % =====================================================================
 %  BATCH INTEGRATION LOOP
@@ -203,11 +204,15 @@ while k <= nCyc
                 end
             end
 
-            % Trim to last nCyclesKeep cycles
+            % Trim to last nCyclesKeep cycles while preserving exact cycle
+            % boundaries. Post-processing reconstructs pressures with
+            % elastance_model(mod(t,T_HB)); therefore t=0 must correspond to
+            % a true cardiac-cycle onset, not simply the first retained solver
+            % sample.
             t_keep_start = t_full(end) - nKeep * T_HB;
-            mask   = t_full >= t_keep_start - 1e-9;
-            t_last = t_full(mask);
-            V_last = V_full(mask, :);
+            [t_last, V_last] = trim_to_phase_aligned_window( ...
+                t_full, V_full, t_keep_start, T_HB, nKeep);
+            t_phase_origin = t_keep_start;
             break;
         end
     end
@@ -231,15 +236,48 @@ if ~ss_reached
     t_start_k  = t_end_full - keep_dur;
 
     [t_full, V_full] = ode15s(odefun, [0, t_end_full], params.ic.V(:), opts);
-    mask   = t_full >= t_start_k;
-    t_last = t_full(mask);
-    V_last = V_full(mask, :);
+    [t_last, V_last] = trim_to_phase_aligned_window( ...
+        t_full, V_full, t_start_k, T_HB, params.sim.nCyclesKeep);
+    t_phase_origin = t_start_k;
 end
 
-%% Re-zero time axis
-t_offset     = t_last(1);
-sim.t        = t_last - t_offset;   % [s]  time axis starting from 0
+%% Re-zero time axis to the retained cycle boundary
+sim.t        = t_last - t_phase_origin;   % [s] phase-aligned retained time axis
 sim.V        = V_last;               % [n×14] state matrix
 sim.ss_reached = ss_reached;         % logical flag: steady state confirmed
 
+end
+
+function [t_keep, V_keep] = trim_to_phase_aligned_window(t_full, V_full, t_start, T_HB, nKeep)
+% TRIM_TO_PHASE_ALIGNED_WINDOW - keep last cycles and insert exact boundaries.
+%   Reconstructing pressures after integration requires the reported time
+%   vector to retain the same phase convention used by system_rhs.m:
+%   ventricular activation starts at phase zero of each cardiac cycle.
+tol = 1e-9;                         % [s] numerical tolerance for boundaries
+t_end = t_start + nKeep * T_HB;     % [s] retained-window end time
+
+mask = (t_full >= t_start) & (t_full <= t_end + tol);
+t_keep = t_full(mask);
+V_keep = V_full(mask, :);
+
+boundary_times = t_start + (0:nKeep)' * T_HB;   % [s]
+for boundary_idx = 1:numel(boundary_times)
+    tb = boundary_times(boundary_idx);          % [s]
+    near_idx = find(abs(t_keep - tb) <= tol, 1, 'first');
+    if ~isempty(near_idx)
+        t_keep(near_idx) = tb;
+        continue;
+    end
+
+    if tb < t_full(1) - tol || tb > t_full(end) + tol
+        continue;
+    end
+
+    Vb = interp1(t_full, V_full, tb, 'linear'); % [state units]
+    t_keep = [t_keep; tb]; %#ok<AGROW>
+    V_keep = [V_keep; Vb]; %#ok<AGROW>
+end
+
+[t_keep, order] = sort(t_keep);
+V_keep = V_keep(order, :);
 end

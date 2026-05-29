@@ -1,11 +1,11 @@
 function metrics = compute_clinical_indices(sim, params)
 % COMPUTE_CLINICAL_INDICES
 % -----------------------------------------------------------------------
-% Derive haemodynamic and geometry-proxy metrics from a steady-state run.
+% Derive haemodynamic, ASD shunt, and geometry-proxy metrics from a steady-state run.
 %
-% AUTHOR:   Unified VSD Model
-% DATE:     2026-04-28
-% VERSION:  2.0
+% AUTHOR:   Unified ASD Model
+% DATE:     2026-05-28
+% VERSION:  2.1
 % -----------------------------------------------------------------------
 
 t  = sim.t(:);
@@ -62,41 +62,52 @@ Qsys_mLs  = mean_t(Qc.SVEN);
 Qpul_mLs  = mean_t(Qc.PVEN);
 Qao_mLs   = mean_t(Qc.AV);
 Qpv_mLs   = mean_t(Qc.PVv);
-Qvsd_mLs  = mean_t(Qc.VSD);
+Qasd_mLs  = mean_t(Qc.ASD);
 Qsys_Lmin = Qsys_mLs * mLs_to_Lmin;
 Qpul_Lmin = Qpul_mLs * mLs_to_Lmin;
 Qao_Lmin  = Qao_mLs * mLs_to_Lmin;
 Qpv_Lmin  = Qpv_mLs * mLs_to_Lmin;
-Qvsd_Lmin = Qvsd_mLs * mLs_to_Lmin;
+Qasd_Lmin = Qasd_mLs * mLs_to_Lmin;
 metrics.Qs_mean_mLs = Qsys_mLs;
 metrics.Qp_mean_mLs = Qpul_mLs;
 metrics.Qs_Lmin = Qsys_Lmin;
 metrics.Qp_Lmin = Qpul_Lmin;
 metrics.Qao_mean_mLs = Qao_mLs;
 metrics.Qpv_mean_mLs = Qpv_mLs;
-metrics.Qvsd_mean_mLs = Qvsd_mLs;
+metrics.Qasd_mean_mLs = Qasd_mLs;
+metrics.Q_ASD_mean_mLs = Qasd_mLs;
 metrics.Qao_Lmin = Qao_Lmin;
 metrics.Qpv_Lmin = Qpv_Lmin;
-metrics.Qvsd_Lmin = Qvsd_Lmin;
+metrics.Qasd_Lmin = Qasd_Lmin;
+metrics.Q_ASD_Lmin = Qasd_Lmin;
 metrics.Qs_ao_gap_Lmin = Qao_Lmin - Qsys_Lmin;
 metrics.Qp_pv_gap_Lmin = Qpv_Lmin - Qpul_Lmin;
 metrics.Qp_minus_Qs_Lmin = Qpul_Lmin - Qsys_Lmin;
-metrics.Q_shunt_Lmin = metrics.Qp_minus_Qs_Lmin;
+metrics.Q_shunt_Lmin = Qasd_Lmin;
+metrics.Q_shunt_balance_gap_Lmin = Qasd_Lmin - metrics.Qp_minus_Qs_Lmin;
 
 metrics.SVR  = (metrics.SAP_mean - metrics.RAP_mean) / max(Qsys_Lmin, 1e-6);
 metrics.PVR  = (metrics.PAP_mean - metrics.LAP_mean) / max(Qpul_Lmin, 1e-6);
 metrics.QpQs = Qpul_Lmin / max(Qsys_Lmin, 1e-6);
+metrics.Qp_Qs = metrics.QpQs;
 
 V_LV_c = XV(time_mask, sidx.V_LV);
 V_RV_c = XV(time_mask, sidx.V_RV);
 V_LA_c = XV(time_mask, sidx.V_LA);
 
-[metrics.LVEDV, idx_ed_lv] = max(V_LV_c);
+[metrics.LVEDV, ~] = max(V_LV_c);
 metrics.LVESV = min(V_LV_c);
-[metrics.RVEDV, idx_ed_rv] = max(V_RV_c);
+[metrics.RVEDV, ~] = max(V_RV_c);
 metrics.RVESV = min(V_RV_c);
-metrics.LVEDP = Pc.LV(idx_ed_lv);
-metrics.RVEDP = Pc.RV(idx_ed_rv);
+
+% Ventricular end-diastolic pressure is reported at the onset of the
+% ventricular elastance cycle (phase zero), immediately before active
+% ventricular contraction. Do not infer EDP from the discretized maximum
+% volume sample; max(V) can occur after elastance has already risen.
+idx_edp = find_cycle_onset_index(t, T0);
+metrics.LVEDP = P.LV(idx_edp);
+metrics.RVEDP = P.RV(idx_edp);
+metrics.EDP_time_s = t(idx_edp);
 
 metrics.LVEF = (metrics.LVEDV - metrics.LVESV) / max(metrics.LVEDV, 1e-6);
 metrics.RVEF = (metrics.RVEDV - metrics.RVESV) / max(metrics.RVEDV, 1e-6);
@@ -107,13 +118,15 @@ metrics.RVCO_Lmin = metrics.RVSV * params.HR / 1000;
 metrics.SVR_from_Qao = (metrics.SAP_mean - metrics.RAP_mean) / max(Qao_Lmin, 1e-6);
 metrics.PVR_from_Qpv = (metrics.PAP_mean - metrics.LAP_mean) / max(Qpv_Lmin, 1e-6);
 
-metrics.Q_shunt_mean_mLs = mean_t(Qc.VSD);
+metrics.Q_shunt_mean_mLs = Qasd_mLs;
 metrics.Q_AV_mean = mean_t(Qc.AV);
 metrics.Q_PVv_mean = mean_t(Qc.PVv);
-metrics.VSD_frac_pct = 100 * metrics.Q_shunt_mean_mLs / max(abs(metrics.Qp_mean_mLs), 1e-6);
-% CO_Lmin is reported as effective systemic output (Qs). In unrepaired VSD,
-% LV stroke output includes recirculated shunt volume and overstates the
-% clinically reported systemic cardiac output.
+metrics.ASD_frac_pct = 100 * metrics.Q_shunt_mean_mLs / max(abs(metrics.Qp_mean_mLs), 1e-6);
+metrics.Q_ASD_direction = classify_asd_direction(Qasd_mLs);
+metrics.ASD_direction = metrics.Q_ASD_direction;
+% CO_Lmin is reported as effective systemic output (Qs). In septal shunt
+% physiology, pulmonary and systemic flows can differ, so Qp/Qs and Q_ASD
+% are reported separately.
 metrics.CO_Lmin = Qsys_Lmin;
 
 metrics.LVEDD_mm = teichholz_diameter_mm(metrics.LVEDV);
@@ -122,6 +135,23 @@ metrics.RV_diameter_proxy_mm = sphere_diameter_mm(metrics.RVEDV);
 metrics.LA_size_proxy_mm = sphere_diameter_mm(max(V_LA_c));
 metrics.LV_sphericity_index = metrics.LVESD_mm / max(metrics.LVEDD_mm, 1e-6);
 
+end
+
+function idx = find_cycle_onset_index(t, cycle_onset_time)
+% FIND_CYCLE_ONSET_INDEX - nearest sample to ventricular activation onset.
+[~, idx] = min(abs(t - cycle_onset_time));
+end
+
+function direction = classify_asd_direction(Q_ASD_mean_mLs)
+% CLASSIFY_ASD_DIRECTION - label mean ASD shunt direction over one cycle.
+tol_mLs = 1e-6; % [mL/s]
+if Q_ASD_mean_mLs > tol_mLs
+    direction = 'LA_to_RA';
+elseif Q_ASD_mean_mLs < -tol_mLs
+    direction = 'RA_to_LA';
+else
+    direction = 'none';
+end
 end
 
 function diameter_mm = teichholz_diameter_mm(volume_mL)

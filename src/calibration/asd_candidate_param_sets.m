@@ -1,0 +1,438 @@
+function report = asd_candidate_param_sets(params0_ASD_pre, clinical, scenario)
+% ASD_CANDIDATE_PARAM_SETS
+% -----------------------------------------------------------------------
+% Defines ASD-specific candidate calibration parameter sets without
+% running GSA, optimisation, or modifying the model.
+%
+% INPUTS:
+%   params0_ASD_pre - Patient Z ASD pre-closure seeded parameters       [-]
+%   clinical        - Patient Z clinical profile from patient_zoya()    [-]
+%   scenario        - scenario string, default 'pre_surgery'            [-]
+%
+% OUTPUTS:
+%   report          - struct of candidate tables and documentation      [-]
+%
+% ASSUMPTIONS:
+%   - Current Patient Z ASD mode is an orifice model, so shunt severity
+%     is controlled by params.asd.Cd and fixed clinical geometry.
+%   - Candidate parameters are proposed for future GSA only; they are not
+%     tuned or applied by this function.
+%
+% SIGN CONVENTIONS:
+%   - Q_ASD > 0 means left-to-right atrial shunt: LA -> RA.
+%
+% REFERENCES:
+%   [1] src/models/asd_shunt_model.m - ASD orifice flow law.
+%   [2] src/calibration/calibration_param_sets.m - VSD staged pattern.
+%
+% AUTHOR:   Diniya / Codex
+% DATE:     2026-05-29
+% VERSION:  1.0
+% -----------------------------------------------------------------------
+
+if nargin < 3 || isempty(scenario)
+    scenario = 'pre_surgery';
+end
+if nargin < 2 || isempty(clinical)
+    clinical = struct();
+end
+
+[group_a, excluded, warnings] = group_a_primary(params0_ASD_pre);
+[group_b, excluded, warnings] = group_b_secondary(params0_ASD_pre, excluded, warnings);
+[group_c, excluded, warnings] = group_c_fixed(params0_ASD_pre, excluded, warnings);
+
+excluded = append_manual_exclusions(excluded, params0_ASD_pre);
+warnings = append_method_warnings(warnings, params0_ASD_pre, clinical, scenario);
+
+report = struct();
+report.summary = build_summary(params0_ASD_pre, scenario);
+report.groupA = group_a;
+report.groupB = group_b;
+report.groupC = group_c;
+report.boundsRationale = build_bounds_rationale();
+report.futureGSATargets = build_future_gsa_targets(clinical, scenario);
+report.excludedParameters = excluded;
+report.warnings = warnings;
+report.notes = build_notes(params0_ASD_pre);
+end
+
+function [tbl, excluded, warnings] = group_a_primary(params)
+% GROUP_A_PRIMARY - vascular and shunt candidates with direct target support.
+rows = {};
+excluded = empty_excluded();
+warnings = empty_warnings();
+rows = add_candidate(rows, params, 'asd.Cd', 'A_Primary_Vascular_Shunt', ...
+    'primary_candidate', 'physical_Cd', 'Q_ASD; Qp; Qs; Qp/Qs; LAP/RAP relation', ...
+    'ASD diameter and Qp/Qs available; direct shunt flow and gradient missing.', ...
+    'In orifice mode, discharge coefficient is the active shunt knob.', ...
+    'Use as shunt candidate for future GSA, not as a tuned value yet.');
+for name = {'R.SAR','R.SC','R.SVEN','C.SAR','R.PAR','R.PCOX','R.PCNO','R.PVEN','C.PAR'}
+    [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
+        name{1}, 'A_Primary_Vascular_Shunt', 'primary_candidate', ...
+        'multiplicative_0p5_2p0', expected_outputs_for(name{1}), ...
+        'Patient Z has systemic/pulmonary pressures, Qp, Qs, and Qp/Qs targets.', ...
+        vascular_rationale_for(name{1}), ...
+        'Conservative 0.5x-2.0x screen around current params0_ASD_pre.');
+end
+tbl = rows_to_candidate_table(rows);
+end
+
+function [tbl, excluded, warnings] = group_b_secondary(params, excluded, warnings)
+% GROUP_B_SECONDARY - atrial and preload candidates for pressure-gradient checks.
+rows = {};
+for name = {'E.LA.EA','E.LA.EB','E.RA.EA','E.RA.EB'}
+    [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
+        name{1}, 'B_Secondary_Atrial_Preload', 'secondary_candidate', ...
+        'multiplicative_0p5_2p0', 'P_LA-P_RA; Q_ASD; Qp/Qs; LAP_mean; RAP_mean', ...
+        'LAP target is available; RAP is missing and remains model prediction only.', ...
+        'ASD flow depends on the atrial pressure gradient and atrial stiffness.', ...
+        'Not automatically optimised unless GSA justifies it.');
+end
+for name = {'V0.LA','V0.RA','V0.SVEN','V0.PVEN'}
+    [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
+        name{1}, 'B_Secondary_Atrial_Preload', 'secondary_candidate', ...
+        'multiplicative_0p8_1p2', 'preload; LAP_mean; RAP_mean; Q_ASD; Qp/Qs', ...
+        'No atrial volume data; preload handles must remain tightly bounded.', ...
+        'Unstressed volume can shift filling pressure and therefore shunt drive.', ...
+        'Treat as secondary because direct preload/atrial-volume evidence is absent.');
+end
+for name = {'C.SVEN','C.PVEN'}
+    [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
+        name{1}, 'B_Secondary_Atrial_Preload', 'secondary_candidate', ...
+        'multiplicative_0p5_2p0', 'venous reservoir pressure; LAP/RAP; Q_ASD; Qp/Qs', ...
+        'Venous compliance is represented in the model but not directly measured.', ...
+        'Venous reservoir compliance can alter atrial filling and shunt gradient.', ...
+        'Secondary only; use after primary vascular/shunt sensitivity is reviewed.');
+end
+tbl = rows_to_candidate_table(rows);
+end
+
+function [tbl, excluded, warnings] = group_c_fixed(params, excluded, warnings)
+% GROUP_C_FIXED - ventricular parameters held fixed unless later approved.
+rows = {};
+for name = {'E.LV.EA','E.LV.EB','E.RV.EA','E.RV.EB'}
+    [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
+        name{1}, 'C_Fixed_Exploratory_Ventricular', 'fixed_by_default_exploratory_only', ...
+        'multiplicative_0p5_2p0', 'LV/RV pressure-volume behavior; SV; EF; CO', ...
+        'Patient Z pre-closure ventricular volume/function targets are missing.', ...
+        'Ventricular elastance is poorly identifiable without LV/RV volume and EF targets.', ...
+        'Do not include in main pre-closure optimisation without explicit approval.');
+end
+for name = {'V0.LV','V0.RV'}
+    [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
+        name{1}, 'C_Fixed_Exploratory_Ventricular', 'fixed_by_default_exploratory_only', ...
+        'multiplicative_0p8_1p2', 'LV/RV preload; EDV/ESV; SV; EF', ...
+        'Patient Z pre-closure LVEDV/LVESV/RVEDV/RVESV are missing.', ...
+        'Ventricular V0 is not identifiable without chamber-volume targets.', ...
+        'Keep fixed for Group A GSA; revisit only after new volume data or approval.');
+end
+tbl = rows_to_candidate_table(rows);
+end
+
+function [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, ...
+    params, name, group, status, bound_policy, outputs, support, rationale, notes)
+% ADD_CANDIDATE_CHECKED - include finite positive values, otherwise warn.
+[ok, value] = get_param_value(params, name);
+if ~ok || ~isnumeric(value) || ~isscalar(value) || ~isfinite(value) || value <= 0
+    reason = 'Missing, zero, Inf, NaN, or non-positive current value.';
+    excluded = add_excluded(excluded, name, 'not_automatic_candidate', value, reason, notes);
+    warnings = add_warning(warnings, name, 'candidate_not_included', reason);
+    return;
+end
+rows = add_candidate(rows, params, name, group, status, bound_policy, ...
+    outputs, support, rationale, notes);
+end
+
+function rows = add_candidate(rows, params, name, group, status, bound_policy, ...
+    outputs, support, rationale, notes)
+% ADD_CANDIDATE - append one finite candidate row.
+[~, value] = get_param_value(params, name);
+[lb, ub, bound_type] = bounds_for(value, bound_policy);
+rows(end + 1, :) = {string(name), string(group), string(status), value, ...
+    lb, ub, string(bound_type), string(outputs), string(support), ...
+    string(rationale), string(notes)};
+end
+
+function [lb, ub, bound_type] = bounds_for(value, policy)
+% BOUNDS_FOR - preliminary bound policy for future GSA.
+switch policy
+    case 'physical_Cd'
+        lb = 0.20;
+        ub = 1.20;
+        bound_type = 'physical_orifice_discharge_coefficient_range';
+    case 'multiplicative_0p8_1p2'
+        lb = 0.80 * value;
+        ub = 1.20 * value;
+        bound_type = '0.8x_to_1.2x_current_value';
+    otherwise
+        lb = 0.50 * value;
+        ub = 2.00 * value;
+        bound_type = '0.5x_to_2.0x_current_value';
+end
+end
+
+function text = expected_outputs_for(name)
+% EXPECTED_OUTPUTS_FOR - map vascular candidate to expected observables.
+if startsWith(name, 'R.S') || strcmp(name, 'C.SAR')
+    text = 'MAP; SBP; DBP; Qs; systemic pressure-flow balance';
+elseif startsWith(name, 'R.P') || strcmp(name, 'C.PAR')
+    text = 'PAP_sys; PAP_dia; PAP_mean; Qp; Qp/Qs; pulmonary pressure-flow balance';
+else
+    text = 'hemodynamic outputs';
+end
+end
+
+function text = vascular_rationale_for(name)
+% VASCULAR_RATIONALE_FOR - short physiology statement for each vascular class.
+if startsWith(name, 'R.S')
+    text = 'Systemic resistance controls systemic afterload and Qs/MAP balance.';
+elseif strcmp(name, 'C.SAR')
+    text = 'Systemic arterial compliance controls pulse pressure and systemic waveform shape.';
+elseif startsWith(name, 'R.P')
+    text = 'Pulmonary resistance controls pulmonary pressure-flow balance and Qp response.';
+elseif strcmp(name, 'C.PAR')
+    text = 'Pulmonary arterial compliance controls PAP pulsatility and pulmonary reservoir behavior.';
+else
+    text = 'Candidate affects pressure-flow balance.';
+end
+end
+
+function tbl = rows_to_candidate_table(rows)
+% ROWS_TO_CANDIDATE_TABLE - table schema shared by candidate groups.
+vars = {'Parameter','Group','Status','Initial_Value','Lower_Bound', ...
+    'Upper_Bound','Bound_Type','Expected_Affected_Outputs', ...
+    'Data_Support','Physiological_Rationale','Notes'};
+if isempty(rows)
+    tbl = cell2table(cell(0, numel(vars)), 'VariableNames', vars);
+else
+    tbl = cell2table(rows, 'VariableNames', vars);
+end
+end
+
+function tbl = build_summary(params, scenario)
+% BUILD_SUMMARY - high-level methodological summary.
+rows = {
+    "Purpose", "Define ASD candidate parameter sets before GSA; no simulation, tuning, GSA, or optimisation."
+    "Scenario", scenario
+    "ASD mode", string(params.asd.mode)
+    "Active shunt candidate", "asd.Cd because current mode is orifice_bidirectional."
+    "R.asd status", sprintf('R.asd=%s; not used by orifice_bidirectional flow calculation.', value_text(params.R.asd))
+    "Fixed geometry", sprintf('ASD diameter %.6g mm; ASD area %.12g mm^2.', params.asd.diameter_mm, params.asd.area_mm2)
+    "Primary group", "Group A: shunt Cd plus systemic/pulmonary vascular R/C candidates."
+    "Secondary group", "Group B: atrial elastance and venous/preload candidates."
+    "Fixed exploratory group", "Group C: ventricular E/V0 fixed by default because volume/function data are missing."
+    };
+tbl = cell2table(rows, 'VariableNames', {'Topic','Details'});
+end
+
+function tbl = build_bounds_rationale()
+% BUILD_BOUNDS_RATIONALE - document preliminary bound policies.
+rows = {
+    "asd.Cd", "0.2 to 1.2", "Physical orifice discharge coefficient interval.", "Used only for future GSA; current value remains unchanged."
+    "Resistances", "0.5x to 2.0x current value", "Conservative screen around seeded pediatric operating point.", "Applies to Group A vascular resistances."
+    "Compliances", "0.5x to 2.0x current value", "Allows pressure waveform and reservoir sensitivity without broad free search.", "Applies to Group A and secondary venous compliances."
+    "Atrial elastance", "0.5x to 2.0x current value", "ASD shunt is sensitive to atrial pressure gradient.", "Secondary because atrial volume data are absent."
+    "Atrial/ventricular V0", "0.8x to 1.2x current value", "Tighter preload bound because V0 is poorly identifiable.", "Ventricular V0 fixed/exploratory only."
+    "Invalid current values", "not included", "Zero, Inf, NaN, or missing values are not automatic candidates.", "Reported in Warnings/Excluded_Parameters."
+    };
+tbl = cell2table(rows, 'VariableNames', {'Parameter_Class','Preliminary_Bounds', ...
+    'Rationale','Notes'});
+end
+
+function tbl = build_future_gsa_targets(clinical, scenario)
+% BUILD_FUTURE_GSA_TARGETS - target outputs available for later GSA.
+src = struct();
+if isstruct(clinical) && isfield(clinical, scenario)
+    src = clinical.(scenario);
+end
+rows = {};
+rows = add_target(rows, 'Qp/Qs', 'primary', 'QpQs', src, 'QpQs', ...
+    'Primary shunt-severity target; not forced as parameter.');
+rows = add_target(rows, 'Qp', 'primary', 'Qp_Lmin', src, 'Qp_Lmin', ...
+    'Pulmonary flow target supports Qp/Qs interpretation.');
+rows = add_target(rows, 'Qs', 'primary', 'Qs_Lmin', src, 'Qs_Lmin', ...
+    'Systemic flow target; MAP is already close and should be preserved.');
+rows = add_target(rows, 'PAP_mean', 'primary', 'PAP_mean_mmHg', src, ...
+    'PAP_mean_mmHg', 'Pulmonary pressure-load target.');
+rows = add_target(rows, 'MAP', 'primary', 'SAP_mean_mmHg', src, ...
+    'SAP_mean_mmHg', 'Investigator-selected RFA/cath systemic mean pressure.');
+rows = add_target(rows, 'LAP_mean', 'primary', 'LAP_mean_mmHg', src, ...
+    'LAP_mean_mmHg', 'Available filling-pressure target; LVEDP unavailable.');
+rows = add_target(rows, 'PAP_sys', 'secondary', 'PAP_sys_mmHg', src, ...
+    'PAP_sys_mmHg', 'Pulmonary waveform target.');
+rows = add_target(rows, 'PAP_dia', 'secondary', 'PAP_dia_mmHg', src, ...
+    'PAP_dia_mmHg', 'Pulmonary waveform target.');
+rows = add_target(rows, 'SBP', 'secondary', 'SAP_sys_mmHg', src, ...
+    'SAP_sys_mmHg', 'Systemic waveform target.');
+rows = add_target(rows, 'DBP', 'secondary', 'SAP_dia_mmHg', src, ...
+    'SAP_dia_mmHg', 'Systemic waveform target.');
+rows = add_target(rows, 'Q_ASD', 'secondary', 'derived Qp-Qs', src, ...
+    'Qp_Lmin', 'Derived comparison only; no direct shunt flow measurement.');
+rows = add_target(rows, 'RAP_mean', 'model_prediction_only', 'RAP_mean_mmHg', ...
+    src, 'RAP_mean_mmHg', 'Clinical RAP missing; do not use as direct target.');
+excluded_primary = {'LVEDV','LVESV','RVEDV','RVESV','LVEF','RVEF'};
+for idx = 1:numel(excluded_primary)
+    rows = add_missing_volume_target(rows, excluded_primary{idx});
+end
+tbl = cell2table(rows, 'VariableNames', {'Metric','Priority','Clinical_Field', ...
+    'Available','Data_Support','Notes'});
+end
+
+function rows = add_missing_volume_target(rows, metric)
+% ADD_MISSING_VOLUME_TARGET - mark unavailable volume/function targets.
+rows(end + 1, :) = {string(metric), "excluded_primary", "missing", ...
+    "NO", "Volume/function data missing in Patient Z pre-closure.", ...
+    "Do not use as primary target before new evidence is available."};
+end
+
+function rows = add_target(rows, metric, priority, label, src, field_name, notes)
+% ADD_TARGET - append target availability row.
+available = isfield(src, field_name) && isnumeric(src.(field_name)) && ...
+    isscalar(src.(field_name)) && isfinite(src.(field_name));
+if strcmp(metric, 'Q_ASD')
+    available = isfield(src, 'Qp_Lmin') && isfield(src, 'Qs_Lmin') && ...
+        isfinite(src.Qp_Lmin) && isfinite(src.Qs_Lmin);
+end
+rows(end + 1, :) = {string(metric), string(priority), string(label), ...
+    string(yes_no(available)), string(target_support_text(src, field_name, available)), ...
+    string(notes)};
+end
+
+function text = target_support_text(src, field_name, available)
+% TARGET_SUPPORT_TEXT - compact target value note.
+if ~available
+    text = 'Not available or not finite.';
+    return;
+end
+if strcmp(field_name, 'Qp_Lmin') && isfield(src, 'Qs_Lmin') && isfinite(src.Qs_Lmin)
+    text = sprintf('%s=%.9g; Qs_Lmin=%.9g when needed.', field_name, src.(field_name), src.Qs_Lmin);
+else
+    text = sprintf('%s=%.9g.', field_name, src.(field_name));
+end
+end
+
+function tbl = append_manual_exclusions(tbl, params)
+% APPEND_MANUAL_EXCLUSIONS - fixed/not-used parameters to document.
+tbl = add_excluded(tbl, 'R.asd', 'excluded_for_current_orifice_mode', ...
+    safe_get(params, 'R.asd'), 'R.asd is Inf and ignored by orifice_bidirectional ASD flow.', ...
+    'Only consider if the model is explicitly switched to a linear resistance ASD mode.');
+tbl = add_excluded(tbl, 'R.vsd', 'legacy_vsd_inactive', ...
+    safe_get(params, 'R.vsd'), 'VSD coupling is not part of active ASD physiology.', ...
+    'Do not use as an ASD pre-closure candidate.');
+tbl = add_excluded(tbl, 'asd.area_mm2', 'fixed_clinical_geometry', ...
+    safe_get(params, 'asd.area_mm2'), 'ASD area is derived from reported diameter and kept fixed.', ...
+    'Do not optimise geometry before a separate measurement-uncertainty decision.');
+tbl = add_excluded(tbl, 'asd.diameter_mm', 'fixed_clinical_geometry', ...
+    safe_get(params, 'asd.diameter_mm'), 'ASD diameter is clinical input, not a calibration knob.', ...
+    'Use in geometry documentation, not GSA parameter set.');
+for name = {'C.PCOX','C.PCNO'}
+    tbl = add_excluded(tbl, name{1}, 'not_in_initial_group_A', safe_get(params, name{1}), ...
+        'Pulmonary capillary compliance is present but not selected for the first candidate set.', ...
+        'May be reconsidered only if pulmonary waveform/volume sensitivity requires it.');
+end
+end
+
+function tbl = append_method_warnings(tbl, params, clinical, scenario)
+% APPEND_METHOD_WARNINGS - key methodological cautions.
+if ~strcmpi(params.asd.mode, 'orifice_bidirectional')
+    tbl = add_warning(tbl, 'asd.mode', 'mode_review_needed', ...
+        'Current ASD mode is not orifice_bidirectional; shunt candidate may need revision.');
+end
+tbl = add_warning(tbl, 'Patient_Z_volume_targets', 'identifiability_limit', ...
+    'LV/RV volume and EF targets are missing, so ventricular E/V0 remain fixed/exploratory.');
+tbl = add_warning(tbl, 'RAP_mean', 'model_prediction_only', ...
+    'Clinical RAP is missing; RAP_mean should not be a direct calibration target.');
+if isstruct(clinical) && isfield(clinical, scenario)
+    src = clinical.(scenario);
+    if ~(isfield(src, 'ASD_gradient_mmHg') && isfinite(src.ASD_gradient_mmHg))
+        tbl = add_warning(tbl, 'ASD_gradient_mmHg', 'missing_direct_shunt_resistance_data', ...
+            'ASD pressure gradient is missing; R_ASD cannot be computed from DeltaP/Q.');
+    end
+end
+end
+
+function tbl = build_notes(params)
+% BUILD_NOTES - thesis-facing method notes.
+rows = {
+    "No execution", "This helper defines candidate metadata only; it does not run GSA, optimisation, calibration, or ODE simulation."
+    "ASD shunt parameter", sprintf('Current mode is %s; therefore asd.Cd is the shunt candidate and R.asd is not active.', params.asd.mode)
+    "Geometry", "ASD diameter and area are measured/derived clinical geometry and are held fixed for the first candidate definition."
+    "Group A", "Primary set for future GSA: vascular pressure-flow parameters plus asd.Cd."
+    "Group B", "Secondary set: atrial/preload candidates that may affect P_LA-P_RA and Q_ASD."
+    "Group C", "Ventricular parameters are fixed/exploratory only because chamber-volume and EF targets are missing."
+    };
+tbl = cell2table(rows, 'VariableNames', {'Topic','Note'});
+end
+
+function [ok, value] = get_param_value(params, name)
+% GET_PARAM_VALUE - dot-notation reader with missing-field guard.
+ok = true;
+value = params;
+parts = strsplit(name, '.');
+for idx = 1:numel(parts)
+    if ~isstruct(value) || ~isfield(value, parts{idx})
+        ok = false;
+        value = NaN;
+        return;
+    end
+    value = value.(parts{idx});
+end
+end
+
+function value = safe_get(params, name)
+% SAFE_GET - return value or NaN for report rows.
+[ok, value] = get_param_value(params, name);
+if ~ok
+    value = NaN;
+end
+end
+
+function tbl = empty_excluded()
+% EMPTY_EXCLUDED - initialise exclusion table.
+tbl = cell2table(cell(0, 5), 'VariableNames', ...
+    {'Parameter','Status','Current_Value','Reason','Notes'});
+end
+
+function tbl = empty_warnings()
+% EMPTY_WARNINGS - initialise warning table.
+tbl = cell2table(cell(0, 3), 'VariableNames', ...
+    {'Parameter','Warning_Type','Details'});
+end
+
+function tbl = add_excluded(tbl, name, status, value, reason, notes)
+% ADD_EXCLUDED - append one exclusion row.
+row = cell2table({string(name), string(status), value, string(reason), ...
+    string(notes)}, 'VariableNames', tbl.Properties.VariableNames);
+tbl = [tbl; row];
+end
+
+function tbl = add_warning(tbl, name, warning_type, details)
+% ADD_WARNING - append one warning row.
+row = cell2table({string(name), string(warning_type), string(details)}, ...
+    'VariableNames', tbl.Properties.VariableNames);
+tbl = [tbl; row];
+end
+
+function text = yes_no(tf)
+% YES_NO - readable boolean status.
+if tf
+    text = 'YES';
+else
+    text = 'NO';
+end
+end
+
+function text = value_text(value)
+% VALUE_TEXT - compact scalar value text.
+if isnumeric(value) && isscalar(value)
+    if isinf(value)
+        text = 'Inf';
+    elseif isnan(value)
+        text = 'NaN';
+    else
+        text = sprintf('%.9g', value);
+    end
+else
+    text = char(string(value));
+end
+end

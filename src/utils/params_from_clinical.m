@@ -1,13 +1,23 @@
 function params = params_from_clinical(params, clinical, scenario, reference_params, case_profile)
 % PARAMS_FROM_CLINICAL
 % -----------------------------------------------------------------------
-% Maps scenario-specific clinical data into model parameters and rebuilds
-% the initial-condition vector. Vascular V0 (especially V0.SVEN) is
-% reconciled for blood-volume/preload consistency without mutating chamber V0.
+% Maps scenario-specific clinical data into ASD model parameters and
+% rebuilds the initial-condition vector. Vascular V0 (especially V0.SVEN)
+% is reconciled for blood-volume/preload consistency without mutating
+% chamber V0.
 %
-% AUTHOR:   Unified VSD Model
-% DATE:     2026-04-28
-% VERSION:  2.0
+% ASSUMPTIONS:
+%   - ASD pre_surgery and pre_closure are treated as the same phase.
+%   - Qp/Qs is stored as a clinical target, not forced as a parameter.
+%   - R_ASD is seeded from DeltaP/Q only when both are directly available.
+%   - Missing Patient Zoya PVR/SVR/volumes do not trigger inferred tuning.
+%
+% SIGN CONVENTIONS:
+%   - Positive Q_ASD means left-to-right atrial shunt: LA -> RA.
+%
+% AUTHOR:   Unified ASD Model
+% DATE:     2026-05-29
+% VERSION:  3.0
 % -----------------------------------------------------------------------
 
 R_VSD_CLOSED = 1e6;
@@ -15,15 +25,7 @@ common = clinical.common;
 k = params.conv.WU_to_R;
 Lmin_to_mLs = params.conv.Lmin_to_mLs;
 
-switch scenario
-    case 'pre_surgery'
-        src = clinical.pre_surgery;
-    case 'post_surgery'
-        src = clinical.post_surgery;
-    otherwise
-        error('params_from_clinical:unknownScenario', ...
-            'scenario must be ''pre_surgery'' or ''post_surgery''.');
-end
+[src, scenario_key, phase_label] = select_scenario_source(clinical, scenario);
 
 if nargin < 4 || isempty(reference_params)
     reference_params = params;
@@ -32,10 +34,23 @@ if nargin < 5
     case_profile = struct();
 end
 
-if isfield(common, 'HR') && ~isnan(common.HR)
-    params.HR = common.HR;
+if ~isfield(params, 'clinical_override') || ~isstruct(params.clinical_override)
+    params.clinical_override = struct();
+end
+params.clinical_override.model_family = 'ASD';
+params.clinical_override.scenario_requested = char(scenario);
+params.clinical_override.scenario_source_field = scenario_key;
+params.clinical_override.scenario_phase = phase_label;
+
+scaled_HR_bpm = params.HR; % [bpm]
+[HR_bpm, HR_source] = resolve_hr_override(common, src, scaled_HR_bpm);
+if isfinite(HR_bpm)
+    params.HR = HR_bpm; % [bpm]
     params = recompute_timing(params);
 end
+params.clinical_override.HR_scaled_bpm = scaled_HR_bpm; % [bpm]
+params.clinical_override.HR_final_bpm = params.HR;      % [bpm]
+params.clinical_override.HR_source = HR_source;
 
 rv_edv_consistency_only = is_metric_consistency_only(case_profile, 'RVEDV');
 if rv_edv_consistency_only
@@ -57,6 +72,10 @@ if isfield(src, 'SVR_WU') && ~isnan(src.SVR_WU)
     params.R.SVEN = params.R.SVEN * ratio;
     params.clinical_override.SVR_seed_WU = SVR_target_WU;
     params.clinical_override.SVR_target_diag = SVR_diag;
+    params.clinical_override.SVR_seed_status = 'seeded_from_available_clinical_SVR';
+else
+    params.clinical_override.SVR_seed_status = ...
+        'missing_keep_pediatric_scaled_resistance';
 end
 
 if isfield(src, 'PVR_WU') && ~isnan(src.PVR_WU)
@@ -71,20 +90,90 @@ if isfield(src, 'PVR_WU') && ~isnan(src.PVR_WU)
     params.R.PVEN = params.R.PVEN * ratio;
     params.clinical_override.PVR_seed_WU = PVR_target_WU;
     params.clinical_override.PVR_target_diag = PVR_diag;
+    params.clinical_override.PVR_seed_status = 'seeded_from_available_clinical_PVR';
+else
+    params.clinical_override.PVR_seed_status = ...
+        'missing_keep_pediatric_scaled_resistance';
 end
 
-params = seed_arterial_compliance_from_clinical(params, src, scenario, case_profile);
-params = configure_vsd(params, src, scenario, R_VSD_CLOSED, Lmin_to_mLs);
+pre_C_SAR = params.C.SAR; % [mL/mmHg]
+pre_C_PAR = params.C.PAR; % [mL/mmHg]
+params = seed_arterial_compliance_from_clinical(params, src, phase_label, case_profile);
+if ~isfield(params.clinical_override, 'C_SAR_seed_source')
+    params.clinical_override.C_SAR_seed_status = ...
+        'skipped_missing_systemic_SV_or_pulse_pressure';
+else
+    params.clinical_override.C_SAR_before_seed_mL_per_mmHg = pre_C_SAR;
+    params.clinical_override.C_SAR_seed_status = 'seeded_from_SV_over_systemic_pulse_pressure';
+end
+if ~isfield(params.clinical_override, 'C_PAR_seed_source')
+    params.clinical_override.C_PAR_seed_status = ...
+        'skipped_missing_pulmonary_SV_or_pulse_pressure';
+else
+    params.clinical_override.C_PAR_before_seed_mL_per_mmHg = pre_C_PAR;
+    params.clinical_override.C_PAR_seed_status = 'seeded_from_SV_over_pulmonary_pulse_pressure';
+end
+
+params = close_legacy_vsd(params, R_VSD_CLOSED);
+params = configure_asd(params, src, phase_label, Lmin_to_mLs);
 
 if isfield(src, 'override_IC') && isequal(src.override_IC, true)
     params = apply_chamber_tuning_from_clinical(params, src, case_profile);
+else
+    params.clinical_override.chamber_tuning = ...
+        'disabled_override_false_or_missing_patient_z_volumes';
 end
 
 params = enforce_vascular_rc_coupling(params, reference_params, case_profile);
 patient = params.scaling.patient;
-params = reconcile_vascular_v0(params, patient, clinical, scenario);
-params.ic.V = build_initial_conditions(params, patient, clinical, scenario);
+params = reconcile_vascular_v0(params, patient, clinical, scenario_key);
+params.ic.V = build_initial_conditions(params, patient, clinical, scenario_key);
 
+end
+
+function [src, scenario_key, phase_label] = select_scenario_source(clinical, scenario)
+% SELECT_SCENARIO_SOURCE - resolve ASD scenario aliases to clinical fields.
+scenario_text = lower(strtrim(char(scenario)));
+switch scenario_text
+    case {'pre_surgery', 'pre_closure'}
+        phase_label = 'pre_closure';
+        candidates = {'pre_closure', 'pre_surgery'};
+    case {'post_surgery', 'post_closure'}
+        phase_label = 'post_closure';
+        candidates = {'post_closure', 'post_surgery'};
+    otherwise
+        error('params_from_clinical:unknownScenario', ...
+            ['scenario must be ''pre_surgery'', ''pre_closure'', ', ...
+            '''post_surgery'', or ''post_closure''.']);
+end
+
+for idx = 1:numel(candidates)
+    candidate = candidates{idx};
+    if isfield(clinical, candidate)
+        src = clinical.(candidate);
+        scenario_key = candidate;
+        return;
+    end
+end
+
+error('params_from_clinical:missingScenarioData', ...
+    'Clinical struct has no data for %s.', phase_label);
+end
+
+function [HR_bpm, HR_source] = resolve_hr_override(common, src, scaled_HR_bpm)
+% RESOLVE_HR_OVERRIDE - prefer scenario HR, then common HR, then scaled HR.
+HR_bpm = scaled_HR_bpm;
+HR_source = 'scaled_baseline';
+if isfield(common, 'HR') && isnumeric(common.HR) && isscalar(common.HR) && ...
+        isfinite(common.HR)
+    HR_bpm = common.HR;
+    HR_source = 'clinical_common_HR';
+end
+if isfield(src, 'HR') && isnumeric(src.HR) && isscalar(src.HR) && ...
+        isfinite(src.HR)
+    HR_bpm = src.HR;
+    HR_source = 'clinical_scenario_HR';
+end
 end
 
 function params = seed_arterial_compliance_from_clinical(params, src, scenario, case_profile)
@@ -136,6 +225,10 @@ if isfield(src, 'CO_Lmin') && isfinite(src.CO_Lmin)
     SV_sys = src.CO_Lmin * 1000 / HR_bpm;
     return;
 end
+if isfield(src, 'Qs_Lmin') && isfinite(src.Qs_Lmin)
+    SV_sys = src.Qs_Lmin * 1000 / HR_bpm;
+    return;
+end
 if isfield(src, 'LVEDV_mL') && isfield(src, 'LVESV_mL') && ...
         all(isfinite([src.LVEDV_mL src.LVESV_mL]))
     SV_sys = src.LVEDV_mL - src.LVESV_mL;
@@ -153,6 +246,10 @@ if is_metric_consistency_only(case_profile, 'RVEDV') && ...
         isfield(src, 'QpQs') && isfinite(src.QpQs)
     Qpul_Lmin = src.CO_Lmin * src.QpQs;
     SV_pul = Qpul_Lmin * 1000 / HR_bpm;
+        return;
+end
+if isfield(src, 'Qp_Lmin') && isfinite(src.Qp_Lmin)
+    SV_pul = src.Qp_Lmin * 1000 / HR_bpm;
     return;
 end
 if isfield(src, 'RVEDV_mL') && isfield(src, 'RVESV_mL') && ...
@@ -177,55 +274,94 @@ else
 end
 end
 
-function params = configure_vsd(params, src, scenario, R_VSD_CLOSED, Lmin_to_mLs)
-params.vsd.mode = 'linear_bidirectional';
-if isfield(src, 'VSD_mode') && ~isempty(src.VSD_mode)
-    params.vsd.mode = lower(char(src.VSD_mode));
-elseif isfield(src, 'vsd_mode') && ~isempty(src.vsd_mode)
-    params.vsd.mode = lower(char(src.vsd_mode));
-end
+function params = configure_asd(params, src, phase_label, Lmin_to_mLs)
+% CONFIGURE_ASD - seed ASD geometry/resistance without calibration.
+params.asd.mode = lower(char(first_valid_text(src, 'ASD_mode', ...
+    params.asd.mode)));
+params.asd.diameter_mm = first_valid(src, {'ASD_diameter_mm'}, NaN);
+params.asd.area_mm2 = first_valid(src, {'ASD_area_mm2'}, NaN);
+params.asd.location = first_valid_text(src, 'ASD_location', '');
 
-if isfield(src, 'VSD_diameter_mm') && ~isnan(src.VSD_diameter_mm)
-    params.vsd.diameter_mm = src.VSD_diameter_mm;
-    params.vsd.area_mm2 = pi * (src.VSD_diameter_mm / 2)^2;
+if ~isfinite(params.asd.area_mm2) && isfinite(params.asd.diameter_mm)
+    params.asd.area_mm2 = pi * (params.asd.diameter_mm / 2)^2; % [mm^2]
+    params.clinical_override.ASD_area_source = ...
+        'derived_from_reported_ASD_diameter';
+elseif isfinite(params.asd.area_mm2)
+    params.clinical_override.ASD_area_source = ...
+        first_valid_text(src, 'ASD_area_source', 'direct_reported_ASD_area');
 else
-    params.vsd.diameter_mm = 0;
-    params.vsd.area_mm2 = 0;
+    params.clinical_override.ASD_area_source = 'not_reported';
 end
 
-switch scenario
-    case 'pre_surgery'
-        R_vsd = params.R.vsd;
-        has_gradient = isfield(src, 'VSD_gradient_mmHg') && ~isnan(src.VSD_gradient_mmHg);
-        has_flow = isfield(src, 'Q_shunt_Lmin') && ~isnan(src.Q_shunt_Lmin);
-        has_geometry = params.vsd.area_mm2 > 0;
+if isfield(src, 'QpQs') && isfinite(src.QpQs)
+    params.clinical_targets.asd.QpQs = src.QpQs; % [-]
+    params.clinical_override.QpQs_status = 'stored_as_target_not_forced';
+else
+    params.clinical_override.QpQs_status = 'not_reported';
+end
 
-        if strcmpi(params.vsd.mode, 'orifice_bidirectional') && has_geometry && has_gradient && has_flow
-            params.vsd.Cd = estimate_orifice_discharge_coefficient(params, src, Lmin_to_mLs);
-            params.clinical_override.vsd_seed_mode = 'orifice_discharge_matched';
-            params.clinical_override.vsd_seed_Cd = params.vsd.Cd;
-        end
+switch phase_label
+    case 'pre_closure'
+        has_gradient = isfield(src, 'ASD_gradient_mmHg') && ...
+            isfinite(src.ASD_gradient_mmHg);
+        has_flow = isfield(src, 'Q_shunt_Lmin') && ...
+            isfinite(src.Q_shunt_Lmin) && abs(src.Q_shunt_Lmin) > 1e-9;
+        has_geometry = isfinite(params.asd.area_mm2) && params.asd.area_mm2 > 0;
 
         if has_gradient && has_flow
-            delta_P = 0.5 * src.VSD_gradient_mmHg;
-            Q_shunt = src.Q_shunt_Lmin * Lmin_to_mLs;
-            if Q_shunt > 1e-4
-                R_vsd = delta_P / Q_shunt;
-            end
-        elseif params.vsd.area_mm2 > 0
-            R_vsd = estimate_linear_vsd_resistance(params, src);
+            q_shunt_mLs = abs(src.Q_shunt_Lmin) * Lmin_to_mLs; % [mL/s]
+            params.R.asd = abs(src.ASD_gradient_mmHg) / max(q_shunt_mLs, 1e-9);
+            params.asd.mode = 'linear_bidirectional';
+            params.asd.mapping_status = ...
+                'clinical_R_ASD_from_reported_gradient_and_direct_Q_ASD';
+            params.clinical_override.ASD_R_seed_status = ...
+                'seeded_from_ASD_gradient_over_direct_shunt_flow';
+        elseif has_geometry
+            params.R.asd = Inf; % [mmHg*s/mL] not used in orifice mode
+            params.asd.mode = 'orifice_bidirectional';
+            params.asd.mapping_status = ...
+                'ASD_geometry_from_diameter_default_Cd_no_gradient_or_Q_ASD';
+            params.clinical_override.ASD_R_seed_status = ...
+                'not_computed_gradient_or_direct_shunt_flow_missing';
+            params.clinical_override.ASD_Cd_status = ...
+                'default_uncalibrated_orifice_Cd_used_with_reported_geometry';
         else
-            R_vsd = max(params.R.vsd, 0.01);
+            fallback_R_asd = 0.10; % [mmHg*s/mL] diagnostic placeholder only
+            params.R.asd = fallback_R_asd;
+            params.asd.mode = 'linear_bidirectional';
+            params.asd.area_mm2 = 0;
+            params.asd.diameter_mm = NaN;
+            params.asd.placeholder_R_asd_mmHg_s_per_mL = fallback_R_asd;
+            params.asd.mapping_status = ...
+                'finite_R_ASD_placeholder_no_geometry_gradient_or_Q_ASD';
+            params.clinical_override.ASD_R_seed_status = ...
+                'placeholder_not_calibrated_no_geometry_gradient_or_Q_ASD';
         end
 
-        params.R.vsd = R_vsd;
-
-    case 'post_surgery'
-        params.R.vsd = R_VSD_CLOSED;
-        params.vsd.area_mm2 = 0;
-        params.vsd.diameter_mm = 0;
-        params.vsd.mode = 'linear_bidirectional';
+    case 'post_closure'
+        params.R.asd = Inf;
+        params.asd.mode = 'linear_bidirectional';
+        params.asd.area_mm2 = 0;
+        params.asd.diameter_mm = 0;
+        params.asd.mapping_status = 'post_closure_closed_ASD';
+        params.clinical_override.ASD_R_seed_status = ...
+            'closed_post_closure_R_ASD_infinite';
 end
+
+params.clinical_override.ASD_diameter_mm = params.asd.diameter_mm; % [mm]
+params.clinical_override.ASD_area_mm2 = params.asd.area_mm2;       % [mm^2]
+params.clinical_override.ASD_mode = params.asd.mode;
+params.clinical_override.ASD_mapping_status = params.asd.mapping_status;
+end
+
+function params = close_legacy_vsd(params, R_VSD_CLOSED)
+% CLOSE_LEGACY_VSD - keep deferred VSD fields inactive in ASD runs.
+params.R.vsd = R_VSD_CLOSED;          % [mmHg*s/mL]
+params.vsd.mode = 'linear_bidirectional';
+params.vsd.area_mm2 = 0;              % [mm^2]
+params.vsd.diameter_mm = 0;           % [mm]
+params.clinical_override.legacy_VSD_status = ...
+    'closed_and_not_used_by_active_ASD_system_rhs';
 end
 
 % RECONCILE_VASCULAR_V0 — reconcile vascular V0 with BV target [mL]
@@ -351,44 +487,23 @@ if isempty(clinical) || ~isstruct(clinical)
 end
 if isfield(clinical, scenario)
     src = clinical.(scenario);
-elseif strcmp(scenario, 'pre_surgery') && isfield(clinical, 'pre_surgery')
-    src = clinical.pre_surgery;
-elseif strcmp(scenario, 'post_surgery') && isfield(clinical, 'post_surgery')
-    src = clinical.post_surgery;
+elseif any(strcmp(scenario, {'pre_surgery', 'pre_closure'}))
+    if isfield(clinical, 'pre_closure')
+        src = clinical.pre_closure;
+        scenario = 'pre_closure';
+    elseif isfield(clinical, 'pre_surgery')
+        src = clinical.pre_surgery;
+        scenario = 'pre_surgery';
+    end
+elseif any(strcmp(scenario, {'post_surgery', 'post_closure'}))
+    if isfield(clinical, 'post_closure')
+        src = clinical.post_closure;
+        scenario = 'post_closure';
+    elseif isfield(clinical, 'post_surgery')
+        src = clinical.post_surgery;
+        scenario = 'post_surgery';
+    end
 end
-end
-
-function R_vsd = estimate_linear_vsd_resistance(params, src)
-if isfield(src, 'DeltaP_VSD_peak_mmHg') && ~isnan(src.DeltaP_VSD_peak_mmHg)
-    DP_ref = 0.5 * src.DeltaP_VSD_peak_mmHg;
-elseif isfield(src, 'VSD_gradient_mmHg') && ~isnan(src.VSD_gradient_mmHg)
-    DP_ref = 0.5 * src.VSD_gradient_mmHg;
-else
-    DP_ref = params.vsd.reference_gradient_mmHg;
-end
-
-A_m2 = params.vsd.area_mm2 * 1e-6;
-DP_Pa = DP_ref * params.conv.mmHg_to_Pa;
-Q_m3s = params.vsd.Cd * A_m2 * sqrt(2 * DP_Pa / params.vsd.rho_blood);
-Q_mLs = Q_m3s * params.conv.m3_to_mL;
-R_vsd = DP_ref / max(Q_mLs, 1e-6);
-end
-
-function Cd = estimate_orifice_discharge_coefficient(params, src, Lmin_to_mLs)
-if isfield(src, 'DeltaP_VSD_peak_mmHg') && ~isnan(src.DeltaP_VSD_peak_mmHg)
-    DP_ref = 0.5 * src.DeltaP_VSD_peak_mmHg;
-elseif isfield(src, 'VSD_gradient_mmHg') && ~isnan(src.VSD_gradient_mmHg)
-    DP_ref = 0.5 * src.VSD_gradient_mmHg;
-else
-    DP_ref = params.vsd.reference_gradient_mmHg;
-end
-
-Q_target_mLs = src.Q_shunt_Lmin * Lmin_to_mLs;
-A_m2 = params.vsd.area_mm2 * 1e-6;
-DP_Pa = max(DP_ref, 0) * params.conv.mmHg_to_Pa;
-velocity_scale = A_m2 * sqrt(2 * DP_Pa / max(params.vsd.rho_blood, 1e-9));
-Cd = Q_target_mLs / max(velocity_scale * params.conv.m3_to_mL, 1e-6);
-Cd = min(max(Cd, 0.20), 1.20);
 end
 
 function params = apply_chamber_tuning_from_clinical(params, src, case_profile)
@@ -523,10 +638,18 @@ function value = first_valid(src, field_names, fallback)
 value = fallback;
 for k = 1:numel(field_names)
     fn = field_names{k};
-    if isfield(src, fn) && ~isnan(src.(fn))
+    if isfield(src, fn) && isnumeric(src.(fn)) && isscalar(src.(fn)) && ...
+            isfinite(src.(fn))
         value = src.(fn);
         return;
     end
+end
+end
+
+function value = first_valid_text(src, field_name, fallback)
+value = fallback;
+if isfield(src, field_name) && ~isempty(src.(field_name))
+    value = src.(field_name);
 end
 end
 

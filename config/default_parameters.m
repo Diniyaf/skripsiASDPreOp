@@ -70,8 +70,8 @@ params.idx = idx;
 
 %% Simulation control
 params.sim.nCyclesSteady = 80;     % cardiac cycles integrated to reach steady-state
-                                   % Set to 80: high-flow VSD (Qp/Qs~3.44, HR=150 bpm)
-                                   % requires ~60-80 cycles to converge pulmonary volumes.
+                                   % Set to 80: high-flow shunt cases can require
+                                   % long pulmonary volume convergence.
                                    % At 0.4s/cycle, 80 cycles = 32s wall time per simulation.
                                    % 40 required for small paediatric s<<1 scale factors
 params.sim.nCyclesKeep   = 2;      % last N cycles retained for post-processing
@@ -102,14 +102,25 @@ params.conv.mmHg_to_Pa = 133.322;   % mmHg -> Pa  (used in Gorlin orifice eq.)
 params.conv.mm_to_m    = 1e-3;      % mm   -> m   (length)
 params.conv.m3_to_mL   = 1e6;       % m³   -> mL  (volume, from SI flow to mL/s)
 
-%% Valve soft-switching parameter  (Guardrail §8.4)
+%% Valve and shunt soft-switching parameters  (Guardrail Section 8.4)
 %   epsilon_valve [mmHg]: width of the smooth transition zone used in
-%   valve_model.m (all valves) and vsd_shunt_model.m (VSD diode gate).
-%   0.1 mmHg preserves >99% of diastolic L→R shunt flow at ΔP ≈ 2 mmHg
-%   (restrictive pediatric VSD). At 0.5 mmHg the gate clips ~10% of
-%   diastolic shunt — too aggressive for the VSD case.
-%   See vsd_shunt_model.m header for full derivation.
+%   valve_model.m (all valves). ASD and legacy VSD shunts keep separate
+%   epsilon values because atrial and ventricular shunt gradients differ.
 params.epsilon_valve = 0.5;         % [mmHg]
+params.epsilon_asd = 0.1;           % [mmHg] tanh/signed-flow smoothing for ASD shunt.
+                                     % Source: assumed numerical regularization;
+                                     % needs ASD-specific sensitivity check.
+
+% ASD defect geometry and mode. Healthy baseline is closed by default.
+params.asd.mode = 'linear_bidirectional';        % [-] default ASD mode; Source: reduced-order model assumption
+params.asd.area_mm2 = 0.0;                       % [mm^2] closed baseline; Source: healthy no-defect state
+params.asd.diameter_mm = 0.0;                    % [mm] closed baseline; Source: healthy no-defect state
+params.asd.Cd = 0.7;                             % [-] discharge coefficient; Source: assumed, needs literature validation
+params.asd.rho_blood = 1060;                     % [kg/m^3] blood density; Source: standard haemodynamics assumption
+params.asd.reference_gradient_mmHg = 5;          % [mmHg] placeholder for resistance seeding; Source: assumed, needs clinical ASD anchor
+
+% Legacy VSD metadata is retained for deferred calibration/GSA utilities
+% but is no longer used by the active ASD system_rhs.m.
 params.epsilon_vsd = 0.1;           % [mmHg] tanh gate width for VSD shunt -- narrower than
                                      % cardiac valves because VSD diastolic DeltaP can be < 1 mmHg.
                                      % At 0.5 mmHg, gate clips ~27% of diastolic shunt flow.
@@ -243,11 +254,16 @@ params.Rvalve.open   = 4.0e-3;      % R_min  [mmHg·s/mL]  tuned open-valve resi
 params.Rvalve.closed = 9.4168e+4;   % R_max  [mmHg·s/mL]  — Source: Valenti Table 3.3 (numerical guard for closed valve)
 
 %% =====================================================================
-%  VSD shunt resistance  [mmHg·s/mL]
-%  Adult reference: effectively closed (not present)
-%  Pre-surgery:  computed from clinical data by params_from_clinical.m
-%  Post-surgery: forced to R_VSD_CLOSED in params_from_clinical.m
+%  ASD shunt resistance  [mmHg*s/mL]
+%  Adult and pediatric healthy references: closed defect (not present).
+%  Pre-closure ASD simulations overwrite params.R.asd with finite resistance
+%  or use params.asd.area_mm2 in orifice mode.
 %% =====================================================================
+params.R.asd = Inf;   % [mmHg*s/mL] healthy baseline: ASD not present / closed
+                      % Source: healthy closed-circuit baseline assumption
+
+% Legacy VSD resistance retained only for deferred VSD calibration/GSA utilities.
+% The active ASD RHS does not couple LV and RV through params.R.vsd.
 params.R.vsd = 1e6;   % [mmHg·s/mL]  healthy adult: VSD not present → effectively infinite
                       % Pre-surgery:  overwritten by params_from_clinical.m from clinical data
                       % Post-surgery: forced to 1e6 mmHg·s/mL by params_from_clinical.m

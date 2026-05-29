@@ -1,0 +1,130 @@
+function clinical = patient_dummy_ASD()
+% PATIENT_DUMMY_ASD
+% -----------------------------------------------------------------------
+% Dummy pre-closure ASD patient profile from Table 1 cohort medians in:
+% "Atrial septal defect closure in children at young age is beneficial for
+% left ventricular function" (local PDF supplied by user).
+%
+% Source cohort:
+%   Children with ASD before closure, n = 22.
+%   Values are table medians; ranges in comments are the reported IQR.
+%
+% Mapping policy:
+%   - Directly reported Table 1 variables are entered when matching template
+%     fields exist.
+%   - Indexed CMR volumes are converted to absolute mL using BSA = 1.1 m^2.
+%   - Variables not reported in Table 1 remain NaN.
+%   - Q_shunt_Lmin is left NaN because it is not directly reported; deriving
+%     it from independent medians would overstate precision.
+%
+% AUTHOR:   Unified ASD Model
+% DATE:     2026-05-28
+% VERSION:  1.0
+% -----------------------------------------------------------------------
+
+clinical = patient_template();
+clinical.common.patient_name = 'patient_dummy_ASD'; % [char] dummy cohort label
+clinical.common.patient_id = 'sjoberg_table1_children_with_asd'; % [char]
+
+%% =====================================================================
+%  COMMON - cohort demographics and resting heart rate
+%% =====================================================================
+clinical.common.age_years = 8.0;     % [years] Table 1: 8 (5-13)
+clinical.common.weight_kg = NaN;     % [kg] not reported in Table 1
+clinical.common.height_cm = 137.0;   % [cm] Table 1: 137 (110-160)
+clinical.common.sex = NaN;           % [-] sex distribution not reported in Table 1
+clinical.common.BSA = 1.1;           % [m^2] Table 1: 1.1 (0.8-1.5)
+clinical.common.HR = 83.0;           % [bpm] Table 1: 83 (75-94)
+clinical.common.maturation_mode = 'normal'; % [-] default pediatric scaling mode
+
+%% =====================================================================
+%  PRE-SURGERY - ASD present before closure
+%% =====================================================================
+% pre_surgery is used here as pre_closure for ASD compatibility.
+pre = clinical.pre_surgery;
+
+% ---- ASD shunt geometry / severity ------------------------------------
+pre.ASD_mode = 'linear_bidirectional'; % [-] Table 1 lacks ASD diameter/area/gradient
+pre.ASD_diameter_mm = NaN;             % [mm] not reported in Table 1
+pre.ASD_area_mm2 = NaN;                % [mm^2] not reported in Table 1
+pre.ASD_gradient_mmHg = NaN;           % [mmHg] not reported in Table 1
+pre.Q_shunt_Lmin = NaN;                % [L/min] not directly reported in Table 1
+pre.QpQs = 1.8;                        % [-] Table 1: 1.8 (1.6-2.4)
+
+% ---- Pulmonary circulation --------------------------------------------
+pre.PAP_sys_mmHg = NaN;                % [mmHg] not reported in Table 1
+pre.PAP_dia_mmHg = NaN;                % [mmHg] not reported in Table 1
+pre.PAP_mean_mmHg = NaN;               % [mmHg] not reported in Table 1
+pre.PVR_WU = NaN;                      % [WU] not reported in Table 1
+
+% ---- Systemic circulation ---------------------------------------------
+pre.SAP_sys_mmHg = 102.0;              % [mmHg] Table 1 SBP: 102 (91-116)
+pre.SAP_dia_mmHg = 67.0;               % [mmHg] Table 1 DBP: 67 (52-71)
+pre.SAP_mean_mmHg = (pre.SAP_sys_mmHg + 2 * pre.SAP_dia_mmHg) / 3; % [mmHg] derived MAP
+pre.SVR_WU = NaN;                      % [WU] not reported in Table 1
+
+% ---- Atrial and ventricular filling pressures -------------------------
+pre.RAP_mean_mmHg = NaN;               % [mmHg] not reported in Table 1
+pre.LAP_mean_mmHg = NaN;               % [mmHg] not reported in Table 1
+pre.LVEDP_mmHg = NaN;                  % [mmHg] not reported in Table 1
+pre.RVEDP_mmHg = NaN;                  % [mmHg] not reported in Table 1
+
+% ---- Ventricular volumes and function from CMR ------------------------
+BSA_m2 = clinical.common.BSA;          % [m^2]
+pre.LVEDV_mL = 63.0 * BSA_m2;          % [mL] LV EDVi 63 (57-70) mL/m^2
+pre.LVESV_mL = 26.0 * BSA_m2;          % [mL] LV ESVi 26 (22-30) mL/m^2
+pre.RVEDV_mL = 129.0 * BSA_m2;         % [mL] RV EDVi 129 (111-160) mL/m^2
+pre.RVESV_mL = 55.0 * BSA_m2;          % [mL] RV ESVi 55 (48-66) mL/m^2
+pre.EF = 0.60;                         % [-] LV EF 60% (54-64)
+pre.RVEF = 0.58;                       % [-] RV EF 58% (54-62)
+pre.override_IC = false;               % [-] keep as validation target unless explicitly enabled
+
+% ---- Cardiac output ---------------------------------------------------
+pre.CO_Lmin = 3.3 * BSA_m2;            % [L/min] LV CI 3.3 (2.7-3.6) L/min/m^2
+
+clinical.pre_surgery = pre;
+
+%% =====================================================================
+%  POST-SURGERY / POST-CLOSURE - ASD closed after closure
+%% =====================================================================
+post = clinical.post_surgery;
+
+post.ASD_status = 'closed';
+post.ASD_mode = 'closed';
+post.ASD_diameter_mm = NaN;       % [mm] closed; no residual defect reported in Table 1
+post.ASD_area_mm2 = 0;            % [mm^2] closed dummy
+post.ASD_gradient_mmHg = NaN;     % [mmHg] not reported
+post.Q_shunt_Lmin = 0;            % [L/min] assumed closed for dummy
+
+post.age_years = 11.0;            % [years] Table 1: 11 (7-14)
+post.height_cm = 144.0;           % [cm] Table 1: 144 (128-165)
+post.BSA = 1.3;                   % [m^2] Table 1: 1.3 (1.0-1.6)
+post.weight_kg = NaN;             % [kg] not reported
+post.HR = 77.0;                   % [bpm] Table 1: 77 (64-99)
+post.time_from_ASD_closure_months = 7.0; % [months] Table 1: 7 (6-9)
+
+post.SAP_sys_mmHg = 108.0;        % [mmHg] Table 1 SBP: 108 (101-115)
+post.SAP_dia_mmHg = 59.0;         % [mmHg] Table 1 DBP: 59 (56-61)
+post.SAP_mean_mmHg = (post.SAP_sys_mmHg + 2 * post.SAP_dia_mmHg) / 3;
+
+BSA_post_m2 = post.BSA;
+
+post.LVEDV_mL = 76.0 * BSA_post_m2;  % [mL] LV EDVi 76 (70-86)
+post.LVESV_mL = 30.0 * BSA_post_m2;  % [mL] LV ESVi 30 (27-33)
+post.LVSV_mL  = 47.0 * BSA_post_m2;  % [mL] LV SVi 47 (40-52)
+post.EF = 0.60;                      % [-] LV EF 60 (54-65)
+post.CO_Lmin = 3.5 * BSA_post_m2;    % [L/min] LV CI 3.5 (2.9-4.2)
+
+post.RVEDV_mL = 80.0 * BSA_post_m2;  % [mL] RV EDVi 80 (82-101) -- verify visual/table
+post.RVESV_mL = 41.0 * BSA_post_m2;  % [mL] RV ESVi 41 (34-51)
+post.RVSV_mL  = 52.0 * BSA_post_m2;  % [mL] RV SVi 52 (40-56)
+post.RVEF = 0.53;                    % [-] RV EF 53 (46-60)
+post.RV_CO_Lmin = 3.9 * BSA_post_m2; % [L/min] RV CI 3.9 (3.2-4.3)
+
+post.QpQs = NaN; % not reported post in Table 1; expected near 1 after closure
+post.Qp_Lmin = post.RV_CO_Lmin;
+post.Qs_Lmin = post.CO_Lmin;
+
+clinical.post_surgery = post;
+
+end

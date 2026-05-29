@@ -32,9 +32,8 @@
 clear; clc;
 root = fileparts(mfilename('fullpath'));
 project_root = fullfile(root, '..');
-project_paths = strsplit(genpath(project_root), pathsep);
-is_shadow = contains(project_paths, [filesep '.claude' filesep]);
-addpath(strjoin(project_paths(~is_shadow), pathsep));
+addpath(fullfile(project_root, 'config'));
+addpath(genpath(fullfile(project_root, 'src')));
 
 fprintf('==========================================\n');
 fprintf('  UNIFIED VSD MODEL - Baseline Test\n');
@@ -211,8 +210,8 @@ Q_AV_c   = dP_AV_c .* (g_AV_c * inv_Ro_c + (1 - g_AV_c) * inv_Rc_c);  % [mL/s]
 SW_LV = -trapz(V_LV_c, P_LV_c);   % [mmHg·mL]  — should be 3000–12000 for healthy adult
 
 % (b) LVEDP proxy — low-pressure diastolic LV pressure.
-%     This baseline-shape check intentionally uses the minimum LV pressure,
-%     while compute_clinical_indices reports LVEDP at max LV volume.
+%     compute_clinical_indices reports ventricular EDP at cycle onset; this
+%     shape check keeps the stricter low-pressure proxy for the whole cycle.
 LVEDP = min(P_LV_c);   % [mmHg]
 
 % (c) LVESP — pressure at end-systole defined by peak LV elastance during
