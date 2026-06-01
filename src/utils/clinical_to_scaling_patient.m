@@ -67,7 +67,7 @@ else
     patient.maturation_mode = 'normal';              % [-]
 end
 
-patient.source = 'config/patient_zoya.m clinical.common only.';
+patient.source = 'clinical.common only; disease fields intentionally ignored.';
 
 end
 

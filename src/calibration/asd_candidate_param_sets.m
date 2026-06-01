@@ -1,19 +1,19 @@
-function report = asd_candidate_param_sets(params0_ASD_pre, clinical, scenario)
+function report = asd_candidate_param_sets(params0_ASD_pre, clinical_or_profile, scenario)
 % ASD_CANDIDATE_PARAM_SETS
 % -----------------------------------------------------------------------
 % Defines ASD-specific candidate calibration parameter sets without
 % running GSA, optimisation, or modifying the model.
 %
 % INPUTS:
-%   params0_ASD_pre - Patient Z ASD pre-closure seeded parameters       [-]
-%   clinical        - Patient Z clinical profile from patient_zoya()    [-]
+%   params0_ASD_pre - ASD pre-closure seeded parameters                 [-]
+%   clinical_or_profile - clinical struct or ASD caseProfile            [-]
 %   scenario        - scenario string, default 'pre_surgery'            [-]
 %
 % OUTPUTS:
 %   report          - struct of candidate tables and documentation      [-]
 %
 % ASSUMPTIONS:
-%   - Current Patient Z ASD mode is an orifice model, so shunt severity
+%   - Current ASD orifice mode uses params.asd.Cd, so shunt severity
 %     is controlled by params.asd.Cd and fixed clinical geometry.
 %   - Candidate parameters are proposed for future GSA only; they are not
 %     tuned or applied by this function.
@@ -33,73 +33,99 @@ function report = asd_candidate_param_sets(params0_ASD_pre, clinical, scenario)
 if nargin < 3 || isempty(scenario)
     scenario = 'pre_surgery';
 end
-if nargin < 2 || isempty(clinical)
-    clinical = struct();
+if nargin < 2 || isempty(clinical_or_profile)
+    clinical_or_profile = struct();
 end
 
-[group_a, excluded, warnings] = group_a_primary(params0_ASD_pre);
-[group_b, excluded, warnings] = group_b_secondary(params0_ASD_pre, excluded, warnings);
-[group_c, excluded, warnings] = group_c_fixed(params0_ASD_pre, excluded, warnings);
+[clinical, case_profile, scenario] = resolve_case_inputs( ...
+    clinical_or_profile, scenario, params0_ASD_pre);
+
+[group_a, excluded, warnings] = group_a_primary(params0_ASD_pre, case_profile);
+[group_b, excluded, warnings] = group_b_secondary(params0_ASD_pre, excluded, warnings, case_profile);
+[group_c, excluded, warnings] = group_c_fixed(params0_ASD_pre, excluded, warnings, case_profile);
 
 excluded = append_manual_exclusions(excluded, params0_ASD_pre);
-warnings = append_method_warnings(warnings, params0_ASD_pre, clinical, scenario);
+warnings = append_method_warnings(warnings, params0_ASD_pre, clinical, scenario, case_profile);
 
 report = struct();
-report.summary = build_summary(params0_ASD_pre, scenario);
+report.caseProfile = case_profile;
+report.summary = build_summary(params0_ASD_pre, scenario, case_profile);
 report.groupA = group_a;
 report.groupB = group_b;
 report.groupC = group_c;
 report.boundsRationale = build_bounds_rationale();
-report.futureGSATargets = build_future_gsa_targets(clinical, scenario);
+report.futureGSATargets = build_future_gsa_targets(clinical, scenario, case_profile);
 report.excludedParameters = excluded;
 report.warnings = warnings;
 report.notes = build_notes(params0_ASD_pre);
 end
 
-function [tbl, excluded, warnings] = group_a_primary(params)
+function [clinical, case_profile, scenario] = resolve_case_inputs(input, scenario, params)
+% RESOLVE_CASE_INPUTS - keep old clinical signature and new caseProfile signature.
+if isstruct(input) && isfield(input, 'is_asd_case_profile') && isequal(input.is_asd_case_profile, true)
+    case_profile = input;
+    clinical = case_profile.clinical;
+    scenario = char(case_profile.scenario_key);
+else
+    clinical = input;
+    case_profile = build_asd_case_calibration_profile(clinical, scenario, params);
+end
+end
+
+function [tbl, excluded, warnings] = group_a_primary(params, case_profile)
 % GROUP_A_PRIMARY - vascular and shunt candidates with direct target support.
 rows = {};
 excluded = empty_excluded();
 warnings = empty_warnings();
+case_label = char(case_profile.patient_label);
 rows = add_candidate(rows, params, 'asd.Cd', 'A_Primary_Vascular_Shunt', ...
     'primary_candidate', 'physical_Cd', 'Q_ASD; Qp; Qs; Qp/Qs; LAP/RAP relation', ...
     'ASD diameter and Qp/Qs available; direct shunt flow and gradient missing.', ...
     'In orifice mode, discharge coefficient is the active shunt knob.', ...
     'Use as shunt candidate for future GSA, not as a tuned value yet.');
 for name = {'R.SAR','R.SC','R.SVEN','C.SAR','R.PAR','R.PCOX','R.PCNO','R.PVEN','C.PAR'}
+    param_name = name{1};
     [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
-        name{1}, 'A_Primary_Vascular_Shunt', 'primary_candidate', ...
-        'multiplicative_0p5_2p0', expected_outputs_for(name{1}), ...
-        'Patient Z has systemic/pulmonary pressures, Qp, Qs, and Qp/Qs targets.', ...
-        vascular_rationale_for(name{1}), ...
-        'Conservative 0.5x-2.0x screen around current params0_ASD_pre.');
+        param_name, 'A_Primary_Vascular_Shunt', 'primary_candidate', ...
+        policy_for(param_name), expected_outputs_for(param_name), ...
+        sprintf('%s has systemic/pulmonary pressure-flow targets if available in caseProfile.', case_label), ...
+        vascular_rationale_for(param_name), ...
+        sprintf('Bounds from VSD build_parameter_registry: %s.', policy_for(param_name)));
 end
 tbl = rows_to_candidate_table(rows);
 end
 
-function [tbl, excluded, warnings] = group_b_secondary(params, excluded, warnings)
+function [tbl, excluded, warnings] = group_b_secondary(params, excluded, warnings, case_profile)
 % GROUP_B_SECONDARY - atrial and preload candidates for pressure-gradient checks.
 rows = {};
+atrial_support = 'LAP target may be available; RAP/atrial volumes may be missing and must be checked in caseProfile.';
+if isfield(case_profile.dataFlags, 'has_lap') && case_profile.dataFlags.has_lap && ...
+        isfield(case_profile.dataFlags, 'has_rap') && case_profile.dataFlags.has_rap
+    atrial_support = 'LAP and RAP targets are available; atrial pressure-gradient support is stronger.';
+end
 for name = {'E.LA.EA','E.LA.EB','E.RA.EA','E.RA.EB'}
+    param_name = name{1};
     [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
-        name{1}, 'B_Secondary_Atrial_Preload', 'secondary_candidate', ...
-        'multiplicative_0p5_2p0', 'P_LA-P_RA; Q_ASD; Qp/Qs; LAP_mean; RAP_mean', ...
-        'LAP target is available; RAP is missing and remains model prediction only.', ...
+        param_name, 'B_Secondary_Atrial_Preload', 'secondary_candidate', ...
+        policy_for(param_name), 'P_LA-P_RA; Q_ASD; Qp/Qs; LAP_mean; RAP_mean', ...
+        atrial_support, ...
         'ASD flow depends on the atrial pressure gradient and atrial stiffness.', ...
         'Not automatically optimised unless GSA justifies it.');
 end
 for name = {'V0.LA','V0.RA','V0.SVEN','V0.PVEN'}
+    param_name = name{1};
     [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
-        name{1}, 'B_Secondary_Atrial_Preload', 'secondary_candidate', ...
-        'multiplicative_0p8_1p2', 'preload; LAP_mean; RAP_mean; Q_ASD; Qp/Qs', ...
+        param_name, 'B_Secondary_Atrial_Preload', 'secondary_candidate', ...
+        policy_for(param_name), 'preload; LAP_mean; RAP_mean; Q_ASD; Qp/Qs', ...
         'No atrial volume data; preload handles must remain tightly bounded.', ...
         'Unstressed volume can shift filling pressure and therefore shunt drive.', ...
         'Treat as secondary because direct preload/atrial-volume evidence is absent.');
 end
 for name = {'C.SVEN','C.PVEN'}
+    param_name = name{1};
     [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
-        name{1}, 'B_Secondary_Atrial_Preload', 'secondary_candidate', ...
-        'multiplicative_0p5_2p0', 'venous reservoir pressure; LAP/RAP; Q_ASD; Qp/Qs', ...
+        param_name, 'B_Secondary_Atrial_Preload', 'secondary_candidate', ...
+        policy_for(param_name), 'venous reservoir pressure; LAP/RAP; Q_ASD; Qp/Qs', ...
         'Venous compliance is represented in the model but not directly measured.', ...
         'Venous reservoir compliance can alter atrial filling and shunt gradient.', ...
         'Secondary only; use after primary vascular/shunt sensitivity is reviewed.');
@@ -107,24 +133,36 @@ end
 tbl = rows_to_candidate_table(rows);
 end
 
-function [tbl, excluded, warnings] = group_c_fixed(params, excluded, warnings)
+function [tbl, excluded, warnings] = group_c_fixed(params, excluded, warnings, case_profile)
 % GROUP_C_FIXED - ventricular parameters held fixed unless later approved.
 rows = {};
+if isfield(case_profile.dataFlags, 'has_ventricular_volume_function_targets') && ...
+        case_profile.dataFlags.has_ventricular_volume_function_targets
+    status = 'exploratory_candidate_volume_supported';
+    support = 'Ventricular volume/function targets are available; review identifiability before calibration.';
+    notes = 'Not automatic; include only if target-tier governance and GSA support it.';
+else
+    status = 'fixed_by_default_exploratory_only';
+    support = 'Ventricular volume/function targets are missing.';
+    notes = 'Do not include in main pre-closure optimisation without explicit approval.';
+end
 for name = {'E.LV.EA','E.LV.EB','E.RV.EA','E.RV.EB'}
+    param_name = name{1};
     [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
-        name{1}, 'C_Fixed_Exploratory_Ventricular', 'fixed_by_default_exploratory_only', ...
-        'multiplicative_0p5_2p0', 'LV/RV pressure-volume behavior; SV; EF; CO', ...
-        'Patient Z pre-closure ventricular volume/function targets are missing.', ...
+        param_name, 'C_Fixed_Exploratory_Ventricular', status, ...
+        policy_for(param_name), 'LV/RV pressure-volume behavior; SV; EF; CO', ...
+        support, ...
         'Ventricular elastance is poorly identifiable without LV/RV volume and EF targets.', ...
-        'Do not include in main pre-closure optimisation without explicit approval.');
+        notes);
 end
 for name = {'V0.LV','V0.RV'}
+    param_name = name{1};
     [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
-        name{1}, 'C_Fixed_Exploratory_Ventricular', 'fixed_by_default_exploratory_only', ...
-        'multiplicative_0p8_1p2', 'LV/RV preload; EDV/ESV; SV; EF', ...
-        'Patient Z pre-closure LVEDV/LVESV/RVEDV/RVESV are missing.', ...
+        param_name, 'C_Fixed_Exploratory_Ventricular', status, ...
+        policy_for(param_name), 'LV/RV preload; EDV/ESV; SV; EF', ...
+        support, ...
         'Ventricular V0 is not identifiable without chamber-volume targets.', ...
-        'Keep fixed for Group A GSA; revisit only after new volume data or approval.');
+        notes);
 end
 tbl = rows_to_candidate_table(rows);
 end
@@ -154,20 +192,115 @@ rows(end + 1, :) = {string(name), string(group), string(status), value, ...
 end
 
 function [lb, ub, bound_type] = bounds_for(value, policy)
-% BOUNDS_FOR - preliminary bound policy for future GSA.
+% BOUNDS_FOR - bound policy for VSD-adapted calibration registry.
+% References: build_parameter_registry.m (Hafiz-Keisya unified VSD)
 switch policy
     case 'physical_Cd'
         lb = 0.20;
         ub = 1.20;
         bound_type = 'physical_orifice_discharge_coefficient_range';
+    case 'resistances_kung2013'
+        lb = 0.40 * value;
+        ub = 2.50 * value;
+        bound_type = 'Kung_2013_resistance_prior';
+    case 'venous_resistance'
+        lb = 0.40 * value;
+        ub = 3.00 * value;
+        bound_type = 'Kung_2013_venous_resistance_wider_RC_coupled';
+    case 'arterial_compliance_windkessel_sys'
+        lb = 0.75 * value;
+        ub = 1.35 * value;
+        bound_type = 'Windkessel_SV_over_pp_systemic_arterial_compliance';
+    case 'arterial_compliance_windkessel_pul'
+        lb = 0.70 * value;
+        ub = 1.45 * value;
+        bound_type = 'Windkessel_SV_over_pp_pulmonary_arterial_compliance';
+    case 'venous_compliance_rc_coupled'
+        lb = 0.50 * value;
+        ub = 1.80 * value;
+        bound_type = 'Kung_2013_RC_coupled_venous_compliance';
+    case 'ventricular_elastance_lv'
+        lb = 0.60 * value;
+        ub = 2.20 * value;
+        bound_type = 'Zhang_2019_LV_elastance_prior';
+    case 'ventricular_elastance_lv_eb'
+        lb = 0.60 * value;
+        ub = 2.50 * value;
+        bound_type = 'Zhang_2019_LV_EB_elastance_prior';
+    case 'ventricular_elastance_rv'
+        lb = 0.55 * value;
+        ub = 2.60 * value;
+        bound_type = 'Zhang_2019_RV_elastance_prior';
+    case 'ventricular_elastance_rv_eb'
+        lb = 0.60 * value;
+        ub = 2.50 * value;
+        bound_type = 'Zhang_2019_RV_EB_elastance_prior';
+    case 'atrial_elastance_wide'
+        lb = 0.20 * value;
+        ub = 2.50 * value;
+        bound_type = 'Zhang_2019_atrial_elastance_wide_prior';
+    case 'atrial_elastance_eb'
+        lb = 0.60 * value;
+        ub = 2.50 * value;
+        bound_type = 'Zhang_2019_atrial_EB_elastance_prior';
+    case 'unstressed_volume_chamber'
+        lb = 0.70 * value;
+        ub = 1.35 * value;
+        bound_type = 'blood_volume_preload_consistency_prior';
+    case 'unstressed_volume_LV'
+        lb = 0.75 * value;
+        ub = 1.40 * value;
+        bound_type = 'blood_volume_preload_consistency_LV_prior';
+    case 'unstressed_volume_RV'
+        lb = 0.70 * value;
+        ub = 1.35 * value;
+        bound_type = 'blood_volume_preload_consistency_RV_prior';
     case 'multiplicative_0p8_1p2'
         lb = 0.80 * value;
         ub = 1.20 * value;
-        bound_type = '0.8x_to_1.2x_current_value';
-    otherwise
+        bound_type = '0.8x_to_1.2x_legacy_heuristic';
+    otherwise  % 'multiplicative_0p5_2p0' legacy
         lb = 0.50 * value;
         ub = 2.00 * value;
-        bound_type = '0.5x_to_2.0x_current_value';
+        bound_type = '0.5x_to_2.0x_legacy_heuristic';
+end
+end
+
+function policy = policy_for(name)
+% POLICY_FOR - map parameter name to VSD-adapted bound policy.
+% References: build_parameter_registry.m (Hafiz-Keisya unified VSD)
+if startsWith(name, 'R.SVEN') || startsWith(name, 'R.PVEN')
+    policy = 'venous_resistance';
+elseif startsWith(name, 'R.')
+    policy = 'resistances_kung2013';
+elseif strcmp(name, 'C.SAR')
+    policy = 'arterial_compliance_windkessel_sys';
+elseif strcmp(name, 'C.PAR')
+    policy = 'arterial_compliance_windkessel_pul';
+elseif startsWith(name, 'C.SVEN') || startsWith(name, 'C.PVEN')
+    policy = 'venous_compliance_rc_coupled';
+elseif strcmp(name, 'E.LV.EA')
+    policy = 'ventricular_elastance_lv';
+elseif strcmp(name, 'E.LV.EB')
+    policy = 'ventricular_elastance_lv_eb';
+elseif strcmp(name, 'E.RV.EA')
+    policy = 'ventricular_elastance_rv';
+elseif strcmp(name, 'E.RV.EB')
+    policy = 'ventricular_elastance_rv_eb';
+elseif any(strcmp(name, {'E.LA.EA','E.RA.EA'}))
+    policy = 'atrial_elastance_wide';
+elseif any(strcmp(name, {'E.LA.EB','E.RA.EB'}))
+    policy = 'atrial_elastance_eb';
+elseif strcmp(name, 'V0.LV')
+    policy = 'unstressed_volume_LV';
+elseif strcmp(name, 'V0.RV')
+    policy = 'unstressed_volume_RV';
+elseif startsWith(name, 'V0.')
+    policy = 'unstressed_volume_chamber';
+elseif strcmp(name, 'asd.Cd')
+    policy = 'physical_Cd';
+else
+    policy = 'multiplicative_0p5_2p0';
 end
 end
 
@@ -209,11 +342,14 @@ else
 end
 end
 
-function tbl = build_summary(params, scenario)
+function tbl = build_summary(params, scenario, case_profile)
 % BUILD_SUMMARY - high-level methodological summary.
+case_label = char(case_profile.patient_label);
 rows = {
     "Purpose", "Define ASD candidate parameter sets before GSA; no simulation, tuning, GSA, or optimisation."
+    "Patient", string(case_label)
     "Scenario", scenario
+    "Case profile mode", string(case_profile.mode)
     "ASD mode", string(params.asd.mode)
     "Active shunt candidate", "asd.Cd because current mode is orifice_bidirectional."
     "R.asd status", sprintf('R.asd=%s; not used by orifice_bidirectional flow calculation.', value_text(params.R.asd))
@@ -239,10 +375,13 @@ tbl = cell2table(rows, 'VariableNames', {'Parameter_Class','Preliminary_Bounds',
     'Rationale','Notes'});
 end
 
-function tbl = build_future_gsa_targets(clinical, scenario)
+function tbl = build_future_gsa_targets(clinical, scenario, case_profile)
 % BUILD_FUTURE_GSA_TARGETS - target outputs available for later GSA.
 src = struct();
-if isstruct(clinical) && isfield(clinical, scenario)
+if nargin >= 3 && isfield(case_profile, 'scenario_key') && ...
+        isstruct(clinical) && isfield(clinical, char(case_profile.scenario_key))
+    src = clinical.(char(case_profile.scenario_key));
+elseif isstruct(clinical) && isfield(clinical, scenario)
     src = clinical.(scenario);
 end
 rows = {};
@@ -281,7 +420,7 @@ end
 function rows = add_missing_volume_target(rows, metric)
 % ADD_MISSING_VOLUME_TARGET - mark unavailable volume/function targets.
 rows(end + 1, :) = {string(metric), "excluded_primary", "missing", ...
-    "NO", "Volume/function data missing in Patient Z pre-closure.", ...
+    "NO", "Volume/function data missing for this ASD pre-closure profile.", ...
     "Do not use as primary target before new evidence is available."};
 end
 
@@ -332,14 +471,17 @@ for name = {'C.PCOX','C.PCNO'}
 end
 end
 
-function tbl = append_method_warnings(tbl, params, clinical, scenario)
+function tbl = append_method_warnings(tbl, params, clinical, scenario, case_profile)
 % APPEND_METHOD_WARNINGS - key methodological cautions.
 if ~strcmpi(params.asd.mode, 'orifice_bidirectional')
     tbl = add_warning(tbl, 'asd.mode', 'mode_review_needed', ...
         'Current ASD mode is not orifice_bidirectional; shunt candidate may need revision.');
 end
-tbl = add_warning(tbl, 'Patient_Z_volume_targets', 'identifiability_limit', ...
-    'LV/RV volume and EF targets are missing, so ventricular E/V0 remain fixed/exploratory.');
+if isfield(case_profile.dataFlags, 'has_ventricular_volume_function_targets') && ...
+        ~case_profile.dataFlags.has_ventricular_volume_function_targets
+    tbl = add_warning(tbl, 'ventricular_volume_targets', 'identifiability_limit', ...
+        'LV/RV volume and EF targets are missing, so ventricular E/V0 remain fixed/exploratory.');
+end
 tbl = add_warning(tbl, 'RAP_mean', 'model_prediction_only', ...
     'Clinical RAP is missing; RAP_mean should not be a direct calibration target.');
 if isstruct(clinical) && isfield(clinical, scenario)
