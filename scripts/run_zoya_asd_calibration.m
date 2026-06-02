@@ -33,6 +33,7 @@
 clear; clc;
 
 project_root = fileparts(fileparts(mfilename('fullpath')));
+restoredefaultpath;
 addpath(project_root);
 addpath(fullfile(project_root, 'config'));
 addpath(genpath(fullfile(project_root, 'src')));
@@ -50,7 +51,7 @@ diary(diary_file); diary on;
 %% ========================================================================
 %  CONFIGURATION
 %% ========================================================================
-ST_THRESHOLD          = 0.10;     % Sobol ST threshold for optimization mask
+ST_THRESHOLD          = 0.05;     % Sobol ST threshold (lowered from 0.10 for sparse-data ASD)
 STAGE_A_SUCCESS_RMSE  = 0.10;     % Stage 1 accepted if primary RMSE < 10%
 MAX_FUN_EVALS_A       = 2500;     % fmincon budget Stage A
 MAX_FUN_EVALS_C       = 1500;     % fmincon budget Stage C
@@ -69,6 +70,8 @@ MAX_SECONDARY_WORSENING_PCT = 5.0; % reject if measured guards degrade strongly
 %  LOAD BASELINE + GSA RESULTS
 %% ========================================================================
 fprintf('=== Loading Patient Zoya ASD baseline + GSA ===\n');
+fprintf('  MODE: EXPLORATORY v4 — atrial/preload expansion\n');
+fprintf('  (persistent LAP and shunt-flow underestimation, see docs)\n\n');
 
 ctx_options = struct('scaling_mode', 'lundquist_bsa', ...
     'runBaselineSimulation', false);
@@ -119,23 +122,56 @@ allow_group_c = resolve_allow_group_c();
     'UseSecondaryGuards', true, ...
     'CaseProfile', caseProfile));
 
-selected_rows = active_selection(active_selection.Mask_Selected, :);
-selected_names = cellstr(selected_rows.Parameter);
-group_c_selected = startsWith(string(selected_rows.Group), "C_");
-stageA_names_expected = selected_names(~group_c_selected);
-stageC_names_expected = selected_names(group_c_selected);
-stageA_names_expected = reshape(stageA_names_expected, 1, []);
-stageC_names_expected = reshape(stageC_names_expected, 1, []);
-stageA_loc = require_parameter_locations(param_names_all, stageA_names_expected, 'Stage A');
-stageC_loc = require_parameter_locations(param_names_all, stageC_names_expected, 'Stage C');
-
+% Build ST_max from GSA data (needed before mask expansion below)
 ST_max = zeros(numel(param_names_all), 1);
+gsa_param_names = gsa_data.sobol.Parameter;
 for i = 1:numel(param_names_all)
-    row = active_selection(strcmp(active_selection.Parameter, param_names_all{i}), :);
-    if ~isempty(row)
-        ST_max(i) = row.Max_ST_PrimarySecondary(1);
+    g_idx = find(strcmp(gsa_param_names, param_names_all{i}), 1);
+    if ~isempty(g_idx)
+        st_row = gsa_data.sobol.ST(g_idx, :);
+        ST_max(i) = max(st_row(isfinite(st_row)));
     end
 end
+
+% Force asd.Cd into mask (physiological shunt knob, per methodology).
+asd_cd_idx = find(strcmp(param_names_all, 'asd.Cd'), 1);
+if ~isempty(asd_cd_idx) && ~optMask(asd_cd_idx)
+    optMask(asd_cd_idx) = true;
+    fprintf('  asd.Cd forced into active set (shunt knob, per methodology).\n');
+end
+
+% AS_v4: EXPLORATORY atrial expansion (direct LA-RA pressure control).
+% Added because v1-v3 showed persistent LAP underestimation limiting shunt flow.
+% E.RA.EB intentionally excluded: RAP clinical data is missing for Zoya.
+atrial_expand = {'V0.LA', 'V0.RA', 'E.LA.EB'};
+for k = 1:numel(atrial_expand)
+    idx = find(strcmp(param_names_all, atrial_expand{k}), 1);
+    if ~isempty(idx) && ~optMask(idx)
+        optMask(idx) = true;
+    end
+end
+fprintf('  EXPLORATORY atrial expansion added: %s (RAP missing, anchor-free)\n', ...
+    strjoin(atrial_expand, ', '));
+
+% Expand mask: ensure >=5 non-ventricular params for sufficient coverage.
+nv_mask = optMask & ~startsWith(string(group_all), "C_");
+if sum(nv_mask) < 5
+    remaining = find(~optMask & ~startsWith(string(group_all), "C_"));
+    [~, order] = sort(ST_max(remaining), 'descend');
+    add_n = min(5 - sum(nv_mask), numel(remaining));
+    optMask(remaining(order(1:add_n))) = true;
+    fprintf('  Expanded mask by %d param(s) to reach min 5 non-ventricular.\n', add_n);
+end
+
+% Rebuild stage assignments from updated optMask (includes forced asd.Cd + expansion)
+stageA_mask = optMask & ~startsWith(string(group_all), "C_");
+stageC_mask = optMask & startsWith(string(group_all), "C_");
+stageA_names_expected = param_names_all(stageA_mask);
+stageC_names_expected = param_names_all(stageC_mask);
+stageA_names_expected = reshape(stageA_names_expected, 1, []);  %#ok<NASGU> ensure row
+stageC_names_expected = reshape(stageC_names_expected, 1, []);
+stageA_loc = find(stageA_mask);
+stageC_loc = find(stageC_mask);
 
 fprintf('  GSA ST threshold for evidence review: %.2f\n', ST_THRESHOLD);
 fprintf('  Curated active-mask calibration parameters: %d/%d\n', ...
@@ -170,6 +206,14 @@ calib_cfg.caseProfile = caseProfile;
 calib_cfg.simOverrides.nCyclesSteady = 40;
 calib_cfg.simOverrides.ss_tol_P = 0.5;
 calib_cfg.simOverrides.ss_tol_V = 0.5;
+
+% Metric weights: prioritise shunt severity metrics that are furthest from targets.
+% QpQs and Qp_Lmin get higher weights because baseline error >60%.
+% Default weight = 1.0 for other primary targets.
+calib_cfg.metricWeights = struct( ...
+    'QpQs', 5.0, ...
+    'Qp_Lmin', 3.0, ...
+    'LAP_mean', 2.0);
 
 fprintf('\n  Clinical targets:\n');
 for i = 1:numel(calib_cfg.targetFields)
@@ -213,7 +257,8 @@ optsA = optimoptions('fmincon', 'Algorithm', 'interior-point', ...
     'MaxFunctionEvaluations', MAX_FUN_EVALS_A, ...
     'MaxIterations', MAX_ITERATIONS, ...
     'OptimalityTolerance', OPTIMALITY_TOL, ...
-    'StepTolerance', STEP_TOL, 'Display', 'iter-detailed');
+    'StepTolerance', STEP_TOL, 'Display', 'iter-detailed', ...
+    'UseParallel', resolve_parallel_fmincon());
 
 optsC = optimoptions('fmincon', 'Algorithm', 'interior-point', ...
     'HessianApproximation', 'lbfgs', 'FiniteDifferenceType', 'forward', ...
@@ -221,7 +266,8 @@ optsC = optimoptions('fmincon', 'Algorithm', 'interior-point', ...
     'MaxFunctionEvaluations', MAX_FUN_EVALS_C, ...
     'MaxIterations', MAX_ITERATIONS, ...
     'OptimalityTolerance', OPTIMALITY_TOL, ...
-    'StepTolerance', STEP_TOL, 'Display', 'iter-detailed');
+    'StepTolerance', STEP_TOL, 'Display', 'iter-detailed', ...
+    'UseParallel', resolve_parallel_fmincon());
 
 %% ========================================================================
 %  STAGE A — Vascular + Shunt
@@ -285,6 +331,7 @@ if ~run_stageC
         fprintf('\n=== Stage C SKIPPED (no ventricular extension params available) ===\n');
     end
     paramsC = paramsA;
+    simC = simA;
     metricsC = metricsA;
     rmse_C = rmse_A;
     fC = fA;
@@ -344,9 +391,15 @@ end
 fprintf('\n=== Post-Calibration Validation (11 gates) ===\n');
 
 % Use Stage C if it ran, otherwise Stage A
-validity_params = iif(stageC_ran, paramsC, paramsA);
-validity_sim    = iif(stageC_ran, simC, simA);
-validity_metrics = iif(stageC_ran, metricsC, metricsA);
+if stageC_ran
+    validity_params = paramsC;
+    validity_sim = simC;
+    validity_metrics = metricsC;
+else
+    validity_params = paramsA;
+    validity_sim = simA;
+    validity_metrics = metricsA;
+end
 
 XV = validity_sim.V;
 sidx = validity_params.idx;
@@ -416,8 +469,13 @@ end
 %% ========================================================================
 fprintf('\n=== Parameter Plausibility ===\n');
 
-final_params = iif(stageC_ran, xC, xA);
-final_names  = iif(stageC_ran, namesC, namesA);
+if stageC_ran
+    final_params = xC;
+    final_names = namesC;
+else
+    final_params = xA;
+    final_names = namesA;
+end
 
 [~, ploc] = ismember(final_names, param_names_all);
 plausibility = struct();
@@ -500,8 +558,13 @@ if rollback
     accepted_label = 'accepted_candidate_rollback_to_baseline';
 else
     fprintf('\n  ** ACCEPTED **: all gates passed.\n');
-    accepted_params = iif(stageC_ran, paramsC, paramsA);
-    accepted_metrics = iif(stageC_ran, metricsC, metricsA);
+    if stageC_ran
+        accepted_params = paramsC;
+        accepted_metrics = metricsC;
+    else
+        accepted_params = paramsA;
+        accepted_metrics = metricsA;
+    end
     accepted_rmse = rmse_C;
     accepted_label = 'accepted_candidate';
 end
@@ -552,7 +615,13 @@ fprintf('  BASELINE OUTPUT TABLE\n');
 fprintf('===============================================================\n');
 T_base = asd_output_table(sim_base, params0, clinical, 'pre_surgery');
 
-calib_sim = iif(rollback, sim_base, iif(stageC_ran, simC, simA));
+if rollback
+    calib_sim = sim_base;
+elseif stageC_ran
+    calib_sim = simC;
+else
+    calib_sim = simA;
+end
 fprintf('\n===============================================================\n');
 fprintf('  CALIBRATED OUTPUT TABLE (%s)\n', accepted_label);
 fprintf('===============================================================\n');
@@ -681,4 +750,20 @@ function allow_group_c = resolve_allow_group_c()
 % RESOLVE_ALLOW_GROUP_C - keep ventricular Group C fixed unless requested.
 env_value = getenv('ASD_CALIB_ALLOW_GROUPC');
 allow_group_c = any(strcmpi(strtrim(env_value), {'1','true','yes','on'}));
+end
+
+function use_par = resolve_parallel_fmincon()
+% RESOLVE_PARALLEL_FMINCON - enable parallel gradient estimation for fmincon.
+% Requires a running parallel pool. Controlled via ASD_CALIB_PARALLEL_FMINCON.
+env_value = getenv('ASD_CALIB_PARALLEL_FMINCON');
+use_par = any(strcmpi(strtrim(env_value), {'1','true','yes','on'}));
+if use_par
+    pool = gcp('nocreate');
+    if isempty(pool)
+        warning('run_zoya_asd_calibration:noPoolForFmincon', ...
+            ['Parallel fmincon requested but no pool is running. ', ...
+             'Start a pool with parpool(''local'', N) first.']);
+        use_par = false;
+    end
+end
 end

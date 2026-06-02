@@ -92,6 +92,9 @@ end
 
 J_shunt_guard = asd_shunt_mechanism_guard(metrics, calib);
 J_pressure_guard = pressure_preservation_guard(metrics, calib);
+J_map_guard = systemic_pressure_band_guard(metrics, calib);
+J_ratio_guard = ratio_chasing_guard(metrics, calib);
+J_rap_guard = rap_physiological_guard(metrics, calib);
 J_parameter_drift = parameter_drift_penalty(x, calib);
 J_plausibility = near_boundary_penalty(x, lb_vec, ub_vec);
 J_boundary = outside_boundary_penalty(x, lb_vec, ub_vec);
@@ -106,6 +109,9 @@ J = J_primary ...
     + optional_scalar(calib, 'secondaryLambda', 0.35) * J_secondary ...
     + optional_scalar(calib, 'shuntGuardLambda', 1.0) * J_shunt_guard ...
     + optional_scalar(calib, 'pressureGuardLambda', 0.5) * J_pressure_guard ...
+    + optional_scalar(calib, 'mapGuardLambda', 5.0) * J_map_guard ...
+    + optional_scalar(calib, 'ratioGuardLambda', 8.0) * J_ratio_guard ...
+    + optional_scalar(calib, 'rapGuardLambda', 3.0) * J_rap_guard ...
     + optional_scalar(calib, 'parameterDriftLambda', 0.10) * J_parameter_drift ...
     + optional_scalar(calib, 'plausibilityLambda', 0.5) * J_plausibility ...
     + optional_scalar(calib, 'boundaryLambda', 20.0) * J_boundary ...
@@ -137,7 +143,8 @@ end
 end
 
 function [J_bundle, n_used] = target_bundle_penalty(metrics, calib, target_struct_name, fields_name, tolerance)
-% TARGET_BUNDLE_PENALTY - normalized squared clinical target error.
+% TARGET_BUNDLE_PENALTY - normalized squared clinical target error with optional metric weights.
+% Set calib.metricWeights.(field) > 1 to prioritise under-fit targets.
 J_bundle = 0;
 n_used = 0;
 if ~isfield(calib, target_struct_name) || ~isfield(calib, fields_name)
@@ -145,12 +152,18 @@ if ~isfield(calib, target_struct_name) || ~isfield(calib, fields_name)
 end
 targets = calib.(target_struct_name);
 fields = calib.(fields_name);
+weights = struct();
+if isfield(calib, 'metricWeights') && isstruct(calib.metricWeights)
+    weights = calib.metricWeights;
+end
 for idx = 1:numel(fields)
     fn = fields{idx};
     if isfield(metrics, fn) && isfield(targets, fn) && ...
             isfinite(metrics.(fn)) && isfinite(targets.(fn)) && abs(targets.(fn)) > 1e-9
         err_rel = abs(metrics.(fn) - targets.(fn)) / abs(targets.(fn));
-        J_bundle = J_bundle + (err_rel / tolerance)^2;
+        w = 1.0;
+        if isfield(weights, fn), w = weights.(fn); end
+        J_bundle = J_bundle + w * (err_rel / tolerance)^2;
         n_used = n_used + 1;
     end
 end
@@ -215,9 +228,86 @@ for idx = 1:numel(calib.secondaryTargetFields)
 end
 end
 
+function J_guard = ratio_chasing_guard(metrics, calib)
+% RATIO_CHASING_GUARD - prevent QpQs improvement by sacrificing Qs.
+% If QpQs improves but Qs drops >10% from baseline → penalty.
+% This prevents the optimizer from achieving better shunt ratio by
+% collapsing systemic output rather than increasing pulmonary flow.
+J_guard = 0;
+if ~isfield(calib, 'guardBaselineMetrics') || ~isstruct(calib.guardBaselineMetrics)
+    return;
+end
+baseline = calib.guardBaselineMetrics;
+if ~isfield(metrics, 'QpQs') || ~isfield(metrics, 'Qs_Lmin') || ...
+        ~isfield(baseline, 'QpQs') || ~isfield(baseline, 'Qs_Lmin')
+    return;
+end
+if ~isfinite(metrics.QpQs) || ~isfinite(metrics.Qs_Lmin) || ...
+        ~isfinite(baseline.QpQs) || ~isfinite(baseline.Qs_Lmin)
+    return;
+end
+% Read target QpQs from calibration config (patient-generic), not hardcoded
+target_qpqs = 3.79;  % default
+if isfield(calib, 'targets') && isfield(calib.targets, 'QpQs') && ...
+        isfinite(calib.targets.QpQs)
+    target_qpqs = calib.targets.QpQs;
+end
+qpqs_improved = abs(metrics.QpQs - target_qpqs) < abs(baseline.QpQs - target_qpqs);
+qs_dropped = metrics.Qs_Lmin < 0.90 * baseline.Qs_Lmin;
+if qpqs_improved && qs_dropped
+    fraction_lost = (baseline.Qs_Lmin - metrics.Qs_Lmin) / baseline.Qs_Lmin;
+    J_guard = 50 * fraction_lost^2;
+end
+end
+
+function J_guard = rap_physiological_guard(metrics, calib)
+% RAP_PHYSIOLOGICAL_GUARD - prevent implausible RAP predictions.
+% RAP is not a clinical target for Zoya (missing data), but implausible
+% values indicate the optimizer is fabricating a shunt gradient.
+% Acceptable pediatric RAP range: [0, 15] mmHg.
+rap_field = 'RAP_mean';
+if ~isfield(metrics, rap_field) || ~isfinite(metrics.(rap_field))
+    J_guard = 0; return;
+end
+rap_value = metrics.(rap_field);
+band = optional_vector(calib, 'rapBand', [0, 15]);
+if rap_value >= band(1) && rap_value <= band(2)
+    J_guard = 0; return;
+end
+if rap_value < band(1)
+    deviation = band(1) - rap_value;
+else
+    deviation = rap_value - band(2);
+end
+J_guard = 50 * deviation^2;  % aggressive — RAP outside range is non-physiological
+end
+
+function J_guard = systemic_pressure_band_guard(metrics, calib)
+% SYSTEMIC_PRESSURE_BAND_GUARD - asymmetric penalty when MAP leaves clinical band.
+% Soft penalty: gentle near boundaries, steep far away. This gives fmincon
+% room to explore without crossing the physiological boundary.
+% Default band: MAP in [85, 95] mmHg (tight around Zoya target of 90).
+% Set calib.mapBand = [lower, upper] to override.
+map_field = 'SAP_mean';
+if ~isfield(metrics, map_field) || ~isfinite(metrics.(map_field))
+    J_guard = 0;
+    return;
+end
+map_value = metrics.(map_field);
+band = optional_vector(calib, 'mapBand', [85, 95]);
+if map_value >= band(1) && map_value <= band(2)
+    J_guard = 0;
+    return;
+end
+if map_value < band(1)
+    deviation = band(1) - map_value;
+else
+    deviation = map_value - band(2);
+end
+J_guard = 10 * deviation^2;  % steep quadratic outside band
+end
+
 function penalty = parameter_drift_penalty(x, calib)
-% PARAMETER_DRIFT_PENALTY - discourage unnecessary movement from seed.
-penalty = 0;
 if ~isfield(calib, 'x0Reference') || isempty(calib.x0Reference)
     return;
 end
@@ -280,6 +370,17 @@ for idx = 1:numel(checks)
             if val < 2 || val > 80, penalty = penalty + 20; end
         case 'SAP_mean'
             if val < 30 || val > 160, penalty = penalty + 20; end
+    end
+end
+end
+
+function value = optional_vector(s, field_name, default_value)
+% OPTIONAL_VECTOR - numeric vector config reader with fallback.
+value = default_value;
+if isstruct(s) && isfield(s, field_name)
+    v = s.(field_name);
+    if isnumeric(v) && numel(v) >= numel(default_value) && all(isfinite(v))
+        value = v(:)';
     end
 end
 end

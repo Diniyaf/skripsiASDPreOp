@@ -78,11 +78,21 @@ rows = {};
 excluded = empty_excluded();
 warnings = empty_warnings();
 case_label = char(case_profile.patient_label);
-rows = add_candidate(rows, params, 'asd.Cd', 'A_Primary_Vascular_Shunt', ...
-    'primary_candidate', 'physical_Cd', 'Q_ASD; Qp; Qs; Qp/Qs; LAP/RAP relation', ...
-    'ASD diameter and Qp/Qs available; direct shunt flow and gradient missing.', ...
-    'In orifice mode, discharge coefficient is the active shunt knob.', ...
-    'Use as shunt candidate for future GSA, not as a tuned value yet.');
+% Shunt parameter: mode-aware (orifice → asd.Cd, linear → R.asd)
+shunt_mode = lower(char(params.asd.mode));
+if strcmp(shunt_mode, 'orifice_bidirectional')
+    rows = add_candidate(rows, params, 'asd.Cd', 'A_Primary_Vascular_Shunt', ...
+        'primary_candidate', 'physical_Cd', 'Q_ASD; Qp; Qs; Qp/Qs; LAP/RAP relation', ...
+        'ASD diameter available; orifice mode active.', ...
+        'In orifice mode, discharge coefficient is the active shunt knob.', ...
+        'Use as shunt candidate for GSA.');
+elseif any(strcmp(shunt_mode, {'linear_bidirectional', 'linear_left_to_right_only'}))
+    rows = add_candidate(rows, params, 'R.asd', 'A_Primary_Vascular_Shunt', ...
+        'primary_candidate', 'resistances_kung2013', 'Q_ASD; Qp; Qs; Qp/Qs; LAP/RAP relation', ...
+        'ASD gradient and flow available; linear shunt mode active.', ...
+        'In linear mode, R.asd is the active shunt resistance knob.', ...
+        'Use as shunt candidate for GSA.');
+end
 for name = {'R.SAR','R.SC','R.SVEN','C.SAR','R.PAR','R.PCOX','R.PCNO','R.PVEN','C.PAR'}
     param_name = name{1};
     [rows, excluded, warnings] = add_candidate_checked(rows, excluded, warnings, params, ...
@@ -351,9 +361,9 @@ rows = {
     "Scenario", scenario
     "Case profile mode", string(case_profile.mode)
     "ASD mode", string(params.asd.mode)
-    "Active shunt candidate", "asd.Cd because current mode is orifice_bidirectional."
-    "R.asd status", sprintf('R.asd=%s; not used by orifice_bidirectional flow calculation.', value_text(params.R.asd))
-    "Fixed geometry", sprintf('ASD diameter %.6g mm; ASD area %.12g mm^2.', params.asd.diameter_mm, params.asd.area_mm2)
+    "Active shunt candidate", mode_aware_shunt_label(params)
+    "R.asd status", mode_aware_rasd_note(params)
+    "Fixed geometry", geometry_note(params)
     "Primary group", "Group A: shunt Cd plus systemic/pulmonary vascular R/C candidates."
     "Secondary group", "Group B: atrial elastance and venous/preload candidates."
     "Fixed exploratory group", "Group C: ventricular E/V0 fixed by default because volume/function data are missing."
@@ -452,9 +462,17 @@ end
 
 function tbl = append_manual_exclusions(tbl, params)
 % APPEND_MANUAL_EXCLUSIONS - fixed/not-used parameters to document.
-tbl = add_excluded(tbl, 'R.asd', 'excluded_for_current_orifice_mode', ...
-    safe_get(params, 'R.asd'), 'R.asd is Inf and ignored by orifice_bidirectional ASD flow.', ...
-    'Only consider if the model is explicitly switched to a linear resistance ASD mode.');
+% Mode-aware: exclude the INACTIVE shunt parameter, keep the active one.
+shunt_mode = lower(char(params.asd.mode));
+if strcmp(shunt_mode, 'orifice_bidirectional')
+    tbl = add_excluded(tbl, 'R.asd', 'excluded_in_orifice_mode', ...
+        safe_get(params, 'R.asd'), 'R.asd is not used in orifice_bidirectional ASD flow.', ...
+        'Only consider if the model is explicitly switched to linear resistance mode.');
+else
+    tbl = add_excluded(tbl, 'asd.Cd', 'excluded_in_linear_mode', ...
+        safe_get(params, 'asd.Cd'), 'asd.Cd is not used in linear ASD shunt mode.', ...
+        'Only consider if the model is explicitly switched to orifice mode.');
+end
 tbl = add_excluded(tbl, 'R.vsd', 'legacy_vsd_inactive', ...
     safe_get(params, 'R.vsd'), 'VSD coupling is not part of active ASD physiology.', ...
     'Do not use as an ASD pre-closure candidate.');
@@ -572,9 +590,41 @@ if isnumeric(value) && isscalar(value)
     elseif isnan(value)
         text = 'NaN';
     else
-        text = sprintf('%.9g', value);
+    text = sprintf('%.9g', value);
+    end
+end
+end
+
+function label = mode_aware_shunt_label(params)
+% MODE_AWARE_SHUNT_LABEL - return the active shunt parameter name for display.
+mode = lower(char(params.asd.mode));
+if strcmp(mode, 'orifice_bidirectional')
+    label = sprintf('asd.Cd (orifice mode, current Cd=%.3g)', params.asd.Cd);
+else
+    label = sprintf('R.asd (linear mode, current R=%.3g mmHg*s/mL)', params.R.asd);
+end
+end
+
+function note = mode_aware_rasd_note(params)
+% MODE_AWARE_RASD_NOTE - describe R.asd status based on active mode.
+mode = lower(char(params.asd.mode));
+if strcmp(mode, 'orifice_bidirectional')
+    if isinf(params.R.asd)
+        note = 'R.asd=Inf; not used by orifice_bidirectional ASD flow.';
+    else
+        note = sprintf('R.asd=%.3g; not active (orifice mode uses asd.Cd).', params.R.asd);
     end
 else
-    text = char(string(value));
+    note = sprintf('R.asd=%.3g mmHg*s/mL; active shunt resistance (linear mode).', params.R.asd);
+end
+end
+
+function note = geometry_note(params)
+% GEOMETRY_NOTE - compact ASD geometry note, tolerant of missing data.
+if isfinite(params.asd.diameter_mm)
+    note = sprintf('ASD diameter %.6g mm; ASD area %.12g mm^2.', ...
+        params.asd.diameter_mm, params.asd.area_mm2);
+else
+    note = 'ASD diameter missing; shunt uses linear R.asd from gradient/flow.';
 end
 end

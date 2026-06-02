@@ -267,7 +267,14 @@ T.Status = Status;
 
 %% Print summary
 fprintf('\n=== ASD Model Output Summary ===\n');
-fprintf('Patient: Zoya | Scenario: %s | HR: %.0f bpm\n', scenario, params.HR);
+patient_label = 'Unknown';
+if isfield(params, 'scaling') && isfield(params.scaling, 'patient') && ...
+        isfield(params.scaling.patient, 'label')
+    patient_label = params.scaling.patient.label;
+elseif isfield(params, 'clinical_override') && isfield(params.clinical_override, 'scenario_phase')
+    patient_label = char(params.clinical_override.scenario_phase);
+end
+fprintf('Patient: %s | Scenario: %s | HR: %.0f bpm\n', patient_label, scenario, params.HR);
 fprintf('%-22s %10s %8s %10s %10s %s\n', ...
     'Metric', 'Value', 'Unit', 'Target', 'Error', 'Status');
 fprintf('%s\n', repmat('-', 1, 90));
