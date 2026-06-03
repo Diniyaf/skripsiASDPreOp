@@ -7,7 +7,7 @@ function T = asd_output_table(sim, params, clinical, scenario)
 % INPUTS:
 %   sim      - simulation struct from integrate_system             [-]
 %   params   - parameter struct (seeded or calibrated)             [-]
-%   clinical - patient clinical struct (patient_zoya)              [-]
+%   clinical - patient clinical struct (patient_*.m)               [-]
 %   scenario - 'pre_surgery' or 'post_surgery'                     [-]
 %
 % OUTPUTS:
@@ -48,7 +48,7 @@ rows = add_row(rows, 'HR', params.HR, 'bpm', ...
 
 % 2. Cardiac Output (systemic flow Qs)
 rows = add_row(rows, 'CO_Lmin', field_or_nan(metrics, 'Qs_Lmin'), 'L/min', ...
-    first_valid(src, {'Qs_Lmin', 'CO_Lmin'}, NaN), 'clinical.pre_surgery.Qs_Lmin', ...
+    first_valid(src, {'Qs_Lmin', 'CO_Lmin'}, NaN), source_field(scenario, 'Qs_Lmin'), ...
     'Systemic cardiac output = Qs; Fick-derived');
 
 % 3. LV Stroke Volume
@@ -72,7 +72,7 @@ rows = add_row(rows, 'RV_SV_mL', rvsv, 'mL', ...
 % 5. LVEF
 lvef_val = field_or_nan(metrics, 'LVEF');
 rows = add_row(rows, 'LVEF', lvef_val, 'fraction', ...
-    field_or_nan(src, 'EF'), 'clinical.pre_surgery.EF', ...
+    field_or_nan(src, 'EF'), source_field(scenario, 'EF'), ...
     'LV ejection fraction; NA if override_IC==false');
 
 % 6. RVEF
@@ -81,32 +81,32 @@ rows = add_row(rows, 'RVEF', field_or_nan(metrics, 'RVEF'), 'fraction', ...
 
 % 7. LVEDV
 rows = add_row(rows, 'LVEDV_mL', field_or_nan(metrics, 'LVEDV'), 'mL', ...
-    field_or_nan(src, 'LVEDV_mL'), 'clinical.pre_surgery.LVEDV_mL', ...
+    field_or_nan(src, 'LVEDV_mL'), source_field(scenario, 'LVEDV_mL'), ...
     'LV end-diastolic volume');
 
 % 8. LVESV
 rows = add_row(rows, 'LVESV_mL', field_or_nan(metrics, 'LVESV'), 'mL', ...
-    field_or_nan(src, 'LVESV_mL'), 'clinical.pre_surgery.LVESV_mL', ...
+    field_or_nan(src, 'LVESV_mL'), source_field(scenario, 'LVESV_mL'), ...
     'LV end-systolic volume');
 
 % 9. RVEDV
 rows = add_row(rows, 'RVEDV_mL', field_or_nan(metrics, 'RVEDV'), 'mL', ...
-    field_or_nan(src, 'RVEDV_mL'), 'clinical.pre_surgery.RVEDV_mL', ...
+    field_or_nan(src, 'RVEDV_mL'), source_field(scenario, 'RVEDV_mL'), ...
     'RV end-diastolic volume');
 
 % 10. RVESV
 rows = add_row(rows, 'RVESV_mL', field_or_nan(metrics, 'RVESV'), 'mL', ...
-    field_or_nan(src, 'RVESV_mL'), 'clinical.pre_surgery.RVESV_mL', ...
+    field_or_nan(src, 'RVESV_mL'), source_field(scenario, 'RVESV_mL'), ...
     'RV end-systolic volume');
 
 % 11. SVR
 rows = add_row(rows, 'SVR_WU', field_or_nan(metrics, 'SVR'), 'Wood units', ...
-    field_or_nan(src, 'SVR_WU'), 'clinical.pre_surgery.SVR_WU', ...
+    field_or_nan(src, 'SVR_WU'), resistance_source(src, scenario, 'SVR'), ...
     'Systemic vascular resistance');
 
 % 12. PVR
 rows = add_row(rows, 'PVR_WU', field_or_nan(metrics, 'PVR'), 'Wood units', ...
-    field_or_nan(src, 'PVR_WU'), 'clinical.pre_surgery.PVR_WU', ...
+    field_or_nan(src, 'PVR_WU'), resistance_source(src, scenario, 'PVR'), ...
     'Pulmonary vascular resistance');
 
 % 13. RVP mean
@@ -123,7 +123,7 @@ if strcmp(scenario, 'pre_surgery')
     sbp = first_valid(src, {'SAP_sys_mmHg', 'SAP_sys_RFA_mmHg'}, NaN);
 end
 rows = add_row(rows, 'SBP_mmHg', field_or_nan(metrics, 'SAP_max'), 'mmHg', ...
-    sbp, 'clinical.pre_surgery.SAP_sys_mmHg', 'Systolic arterial pressure');
+    sbp, source_field(scenario, 'SAP_sys_mmHg'), 'Systolic arterial pressure');
 
 % 15. DBP
 dbp = field_or_nan(src, 'SAP_dia_mmHg');
@@ -131,7 +131,7 @@ if strcmp(scenario, 'pre_surgery')
     dbp = first_valid(src, {'SAP_dia_mmHg', 'SAP_dia_RFA_mmHg'}, NaN);
 end
 rows = add_row(rows, 'DBP_mmHg', field_or_nan(metrics, 'SAP_min'), 'mmHg', ...
-    dbp, 'clinical.pre_surgery.SAP_dia_mmHg', 'Diastolic arterial pressure');
+    dbp, source_field(scenario, 'SAP_dia_mmHg'), 'Diastolic arterial pressure');
 
 % 16. MAP
 map = field_or_nan(src, 'SAP_mean_mmHg');
@@ -139,31 +139,31 @@ if strcmp(scenario, 'pre_surgery')
     map = first_valid(src, {'SAP_mean_mmHg', 'MAP_RFA_mmHg', 'MAP_NIBP_mmHg'}, NaN);
 end
 rows = add_row(rows, 'MAP_mmHg', field_or_nan(metrics, 'SAP_mean'), 'mmHg', ...
-    map, 'clinical.pre_surgery.SAP_mean_mmHg', 'Mean arterial pressure');
+    map, source_field(scenario, 'SAP_mean_mmHg'), 'Mean arterial pressure');
 
 % 17. PAP systolic
 rows = add_row(rows, 'PAP_sys_mmHg', field_or_nan(metrics, 'PAP_max'), 'mmHg', ...
-    field_or_nan(src, 'PAP_sys_mmHg'), 'clinical.pre_surgery.PAP_sys_mmHg', ...
+    field_or_nan(src, 'PAP_sys_mmHg'), source_field(scenario, 'PAP_sys_mmHg'), ...
     'Systolic pulmonary artery pressure');
 
 % 18. PAP diastolic
 rows = add_row(rows, 'PAP_dia_mmHg', field_or_nan(metrics, 'PAP_min'), 'mmHg', ...
-    field_or_nan(src, 'PAP_dia_mmHg'), 'clinical.pre_surgery.PAP_dia_mmHg', ...
+    field_or_nan(src, 'PAP_dia_mmHg'), source_field(scenario, 'PAP_dia_mmHg'), ...
     'Diastolic pulmonary artery pressure');
 
 % 19. PAP mean
 rows = add_row(rows, 'PAP_mean_mmHg', field_or_nan(metrics, 'PAP_mean'), 'mmHg', ...
-    field_or_nan(src, 'PAP_mean_mmHg'), 'clinical.pre_surgery.PAP_mean_mmHg', ...
+    field_or_nan(src, 'PAP_mean_mmHg'), source_field(scenario, 'PAP_mean_mmHg'), ...
     'Mean pulmonary artery pressure');
 
 % 20. LAP mean
 rows = add_row(rows, 'LAP_mean_mmHg', field_or_nan(metrics, 'LAP_mean'), 'mmHg', ...
-    field_or_nan(src, 'LAP_mean_mmHg'), 'clinical.pre_surgery.LAP_mean_mmHg', ...
+    field_or_nan(src, 'LAP_mean_mmHg'), source_field(scenario, 'LAP_mean_mmHg'), ...
     'Left atrial mean pressure / PCWP surrogate');
 
 % 21. RAP mean
 rows = add_row(rows, 'RAP_mean_mmHg', field_or_nan(metrics, 'RAP_mean'), 'mmHg', ...
-    field_or_nan(src, 'RAP_mean_mmHg'), 'clinical.pre_surgery.RAP_mean_mmHg', ...
+    field_or_nan(src, 'RAP_mean_mmHg'), source_field(scenario, 'RAP_mean_mmHg'), ...
     'Right atrial mean pressure');
 
 % 22. LA-RA pressure gradient (DeltaP_ASD)
@@ -180,12 +180,12 @@ else
     end
 end
 rows = add_row(rows, 'DeltaP_LA_RA_mmHg', deltaP_LA_RA, 'mmHg', ...
-    field_or_nan(src, 'ASD_gradient_mmHg'), 'clinical.pre_surgery.ASD_gradient_mmHg', ...
+    field_or_nan(src, 'ASD_gradient_mmHg'), source_field(scenario, 'ASD_gradient_mmHg'), ...
     'Mean LA-RA pressure gradient driving ASD shunt');
 
 % 23. Qp/Qs
 rows = add_row(rows, 'QpQs', field_or_nan(metrics, 'QpQs'), '[-]', ...
-    field_or_nan(src, 'QpQs'), 'clinical.pre_surgery.QpQs', ...
+    field_or_nan(src, 'QpQs'), source_field(scenario, 'QpQs'), ...
     'Pulmonary-to-systemic flow ratio');
 
 % 24. Q_ASD mean (mL/s, ODE-internal unit)
@@ -199,15 +199,16 @@ rows = add_row(rows, 'Q_ASD_mean_mLs', q_asd_mLs_per_s, 'mL/s', ...
     NaN, 'NA', 'Mean ASD shunt flow (ODE unit: mL/s)');
 
 % 25. Q_ASD (L/min)
+[q_asd_target, q_asd_source] = q_asd_target_and_source(src, scenario);
 rows = add_row(rows, 'Q_ASD_Lmin', field_or_nan(metrics, 'Q_ASD_Lmin'), 'L/min', ...
-    field_or_nan(src, 'Q_shunt_Lmin'), 'clinical.pre_surgery.Q_shunt_Lmin', ...
+    q_asd_target, q_asd_source, ...
     'Mean ASD shunt flow; derived Qp-Qs if direct measurement unavailable');
 
 % 26. ASD direction code
 dir_code = 'NA';
 if isfield(metrics, 'Q_ASD_Lmin') && isfinite(metrics.Q_ASD_Lmin)
     if metrics.Q_ASD_Lmin > 0.05
-        dir_code = 'L->R';       % left-to-right (expected for Zoya)
+        dir_code = 'L->R';       % left-to-right ASD shunt
     elseif metrics.Q_ASD_Lmin < -0.05
         dir_code = 'R->L';       % right-to-left (Eisenmenger)
     else
@@ -222,7 +223,7 @@ T = cell2table(rows, 'VariableNames', ...
     {'Metric', 'Value', 'Unit', 'Target', 'Target_Source', 'Description'});
 
 [ModelField, Output_Tier, IncludeInGSA, IncludeInCalibration, Discussion_Role] = ...
-    output_governance(T.Metric);
+    output_governance(T.Metric, T.Target);
 T.ModelField = ModelField;
 T.Output_Tier = Output_Tier;
 T.IncludeInGSA = IncludeInGSA;
@@ -319,6 +320,59 @@ for k = 1:numel(field_names)
 end
 end
 
+function source = source_field(scenario, field_name)
+% SOURCE_FIELD - scenario-aware clinical source label.
+source = string(sprintf('clinical.%s.%s', char(string(scenario)), field_name));
+end
+
+function source = resistance_source(src, scenario, name)
+% RESISTANCE_SOURCE - source label for reported or derived SVR/PVR.
+source_field_name = sprintf('%s_WU_source', upper(name));
+if isstruct(src) && isfield(src, source_field_name)
+    source = string(src.(source_field_name));
+else
+    source = source_field(scenario, sprintf('%s_WU', upper(name)));
+end
+end
+
+function [target, source] = q_asd_target_and_source(src, scenario)
+% Q_ASD_TARGET_AND_SOURCE - direct vs Qp-Qs-derived shunt comparison label.
+target = field_or_nan(src, 'Q_shunt_Lmin');
+if ~isfinite(target)
+    q_p = field_or_nan(src, 'Qp_Lmin');
+    q_s = first_valid(src, {'Qs_Lmin', 'CO_Lmin'}, NaN);
+    if isfinite(q_p) && isfinite(q_s)
+        target = q_p - q_s;
+    end
+end
+
+if is_direct_qasd(src)
+    source = source_field(scenario, 'Q_shunt_Lmin_direct');
+elseif isfinite(target)
+    source = string(sprintf('clinical.%s.Qp_Lmin_minus_Qs_Lmin (derived_from_Qp_minus_Qs)', ...
+        char(string(scenario))));
+else
+    source = source_field(scenario, 'Q_shunt_Lmin_not_reported');
+end
+end
+
+function tf = is_direct_qasd(src)
+% IS_DIRECT_QASD - direct only if explicitly marked independent.
+tf = false;
+if ~isstruct(src) || ~isfield(src, 'Q_shunt_Lmin') || ...
+        ~isnumeric(src.Q_shunt_Lmin) || ~isfinite(src.Q_shunt_Lmin)
+    return;
+end
+if isfield(src, 'Q_shunt_is_direct') && islogical(src.Q_shunt_is_direct)
+    tf = src.Q_shunt_is_direct;
+    return;
+end
+if isfield(src, 'Q_shunt_source')
+    source_text = lower(char(string(src.Q_shunt_source)));
+    tf = contains(source_text, 'direct') && ~contains(source_text, 'derived');
+end
+end
+
 function s = value_str(v)
 if isnan(v)
     s = 'NA';
@@ -331,7 +385,7 @@ else
 end
 end
 
-function [model_field, tier, include_gsa, include_calibration, role] = output_governance(metrics)
+function [model_field, tier, include_gsa, include_calibration, role] = output_governance(metrics, targets)
 % OUTPUT_GOVERNANCE - tier all printed ASD outputs for thesis reporting.
 n = numel(metrics);
 model_field = strings(n, 1);
@@ -339,9 +393,13 @@ tier = strings(n, 1);
 include_gsa = false(n, 1);
 include_calibration = false(n, 1);
 role = strings(n, 1);
+if nargin < 2 || isempty(targets)
+    targets = nan(n, 1);
+end
 
 for idx = 1:n
     metric_name = char(string(metrics(idx)));
+    has_target = idx <= numel(targets) && isnumeric(targets) && isfinite(targets(idx));
     switch metric_name
         case 'HR'
             model_field(idx) = "HR";
@@ -415,8 +473,38 @@ for idx = 1:n
             model_field(idx) = "ASD_direction";
             tier(idx) = "qualitative_validity_guard";
             role(idx) = "Qualitative shunt direction validity check.";
-        case {'RAP_mean_mmHg', 'SVR_WU', 'PVR_WU', 'RVP_mean_mmHg', ...
-                'DeltaP_LA_RA_mmHg'}
+        case {'RAP_mean_mmHg'}
+            model_field(idx) = "RAP_mean";
+            if has_target
+                tier(idx) = "hard_primary";
+                include_gsa(idx) = true;
+                include_calibration(idx) = true;
+                role(idx) = "Measured right atrial pressure target.";
+            else
+                tier(idx) = "prediction_only_discussion";
+                role(idx) = "Model prediction for physiological discussion; no direct fitting target.";
+            end
+        case {'DeltaP_LA_RA_mmHg'}
+            model_field(idx) = "DeltaP_LA_RA";
+            if has_target
+                tier(idx) = "secondary_mechanism_guard";
+                include_gsa(idx) = true;
+                include_calibration(idx) = false;
+                role(idx) = "Measured LA-RA gradient for ASD mechanism discussion and GSA screening.";
+            else
+                tier(idx) = "prediction_only_discussion";
+                role(idx) = "Model prediction for physiological discussion; no direct fitting target.";
+            end
+        case {'SVR_WU', 'PVR_WU'}
+            model_field(idx) = erase(string(metric_name), "_WU");
+            if has_target
+                tier(idx) = "validation_available_not_primary";
+                role(idx) = "Reported/derived vascular resistance check; not independent primary fitting evidence.";
+            else
+                tier(idx) = "prediction_only_discussion";
+                role(idx) = "Model prediction for physiological discussion; no direct fitting target.";
+            end
+        case {'RVP_mean_mmHg'}
             model_field(idx) = string(metric_name);
             tier(idx) = "prediction_only_discussion";
             role(idx) = "Model prediction for physiological discussion; no direct fitting target.";
@@ -424,7 +512,7 @@ for idx = 1:n
                 'LVEDV_mL', 'LVESV_mL', 'RVEDV_mL', 'RVESV_mL'}
             model_field(idx) = string(metric_name);
             tier(idx) = "prediction_only_missing_volume_function";
-            role(idx) = "Model prediction; Patient Z pre-closure volume/function targets are missing.";
+            role(idx) = "Model prediction; selected ASD scenario volume/function targets are missing.";
         otherwise
             model_field(idx) = string(metric_name);
             tier(idx) = "review_required";

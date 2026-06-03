@@ -75,10 +75,16 @@ rows = add_volume_function(rows, src, 'LVESV_mL', 'LVESV', {'LVESV_mL'}, 'mL', s
 rows = add_volume_function(rows, src, 'RVEDV_mL', 'RVEDV', {'RVEDV_mL'}, 'mL', source_prefix);
 rows = add_volume_function(rows, src, 'RVESV_mL', 'RVESV', {'RVESV_mL'}, 'mL', source_prefix);
 
-rows = add_prediction_or_available(rows, src, 'SVR_WU', 'SVR', {'SVR_WU'}, 'WU', ...
-    source_prefix, 'SVR is used only when directly available.');
-rows = add_prediction_or_available(rows, src, 'PVR_WU', 'PVR', {'PVR_WU'}, 'WU', ...
-    source_prefix, 'PVR is used only when directly available.');
+[svr_target, svr_field, svr_source] = resistance_target(src, 'SVR', source_prefix);
+rows = add_row(rows, 'SVR_WU', 'SVR', svr_field, ...
+    tier_for_optional_validation(svr_target), false, false, svr_target, 'WU', ...
+    svr_source, 'SVR is validation/seeding evidence, not an independent primary target.', ...
+    'Do not include in GSA/calibration ranking to avoid double-counting MAP/RAP/Qs.');
+[pvr_target, pvr_field, pvr_source] = resistance_target(src, 'PVR', source_prefix);
+rows = add_row(rows, 'PVR_WU', 'PVR', pvr_field, ...
+    tier_for_optional_validation(pvr_target), false, false, pvr_target, 'WU', ...
+    pvr_source, 'PVR is validation/seeding evidence, not an independent primary target.', ...
+    'Do not include in GSA/calibration ranking to avoid double-counting PAP/LAP/Qp.');
 rows = add_prediction(rows, 'RVP_mean_mmHg', 'RVP_mean', 'missing', 'mmHg', ...
     'Mean RV pressure is not a direct target in the current ASD profile.');
 
@@ -103,14 +109,17 @@ rows = add_pressure_guard(rows, src, 'PAP_mean_mmHg', 'PAP_mean', 'PAP_mean_mmHg
 rows = add_pressure_guard(rows, src, 'LAP_mean_mmHg', 'LAP_mean', 'LAP_mean_mmHg', ...
     'hard_primary', 'mmHg', source_prefix, ...
     'Left atrial filling-pressure target.');
-rows = add_prediction_or_available(rows, src, 'RAP_mean_mmHg', 'RAP_mean', ...
-    {'RAP_mean_mmHg'}, 'mmHg', source_prefix, ...
-    'RAP is prediction-only when missing.');
+rows = add_pressure_guard(rows, src, 'RAP_mean_mmHg', 'RAP_mean', 'RAP_mean_mmHg', ...
+    'hard_primary', 'mmHg', source_prefix, ...
+    'Right atrial pressure target when clinically reported.');
 
+has_gradient_target = has_any(src, {'ASD_gradient_mmHg'});
 rows = add_row(rows, 'DeltaP_LA_RA_mmHg', 'DeltaP_LA_RA', 'ASD_gradient_mmHg', ...
-    'derived_prediction_only', false, false, first_numeric(src, {'ASD_gradient_mmHg'}), ...
-    'mmHg', source_prefix, 'Atrial pressure gradient is a mechanism output.', ...
-    'Use for mechanism discussion unless a direct gradient is available and selected.');
+    tier_if_available(src, {'ASD_gradient_mmHg'}, 'soft_secondary_mechanism_guard', ...
+    'derived_prediction_only'), has_gradient_target, false, ...
+    first_numeric(src, {'ASD_gradient_mmHg'}), ...
+    'mmHg', source_prefix, 'Atrial pressure gradient is a mechanism guard.', ...
+    'Included in GSA when available; not fit as primary to avoid double-counting LAP/RAP.');
 
 rows = add_row(rows, 'QpQs', 'QpQs', 'QpQs', ...
     tier_if_available(src, {'QpQs'}, 'hard_primary', 'prediction_only'), ...
@@ -119,23 +128,25 @@ rows = add_row(rows, 'QpQs', 'QpQs', 'QpQs', ...
     'Qp/Qs is a target, not a parameter.');
 
 q_asd_lmin = derived_qasd(src);
-direct_qasd = first_numeric(src, {'Q_shunt_Lmin'});
-has_direct_qasd = isfinite(direct_qasd);
-q_asd_target = direct_qasd;
-q_asd_source = 'direct Q_shunt_Lmin';
+reported_qasd = first_numeric(src, {'Q_shunt_Lmin'});
+has_direct_qasd = is_direct_qasd(src) && isfinite(reported_qasd);
+q_asd_target = reported_qasd;
+q_asd_source = 'direct_Q_shunt_Lmin';
+q_asd_clinical_field = 'Q_shunt_Lmin';
 q_asd_tier = 'soft_secondary_direct_shunt';
 include_qasd_cal = true;
 if ~has_direct_qasd
-    q_asd_target = q_asd_lmin;
-    q_asd_source = 'derived from Qp_Lmin - Qs_Lmin';
-    q_asd_tier = 'soft_secondary_derived_comparison';
+    q_asd_target = first_finite(reported_qasd, q_asd_lmin);
+    q_asd_source = 'derived_from_Qp_minus_Qs';
+    q_asd_clinical_field = 'Qp_Lmin_minus_Qs_Lmin';
+    q_asd_tier = 'soft_secondary_derived_from_Qp_minus_Qs';
     include_qasd_cal = false;
 end
 rows = add_row(rows, 'Q_ASD_mean_mLs', 'Q_ASD_mean_mLs', q_asd_source, ...
     'derived_prediction_only', false, false, q_asd_target * 1000 / 60, ...
     'mL/s', q_asd_source, 'ODE-unit ASD shunt flow.', ...
     'Report for unit transparency; avoid direct fitting unless directly measured.');
-rows = add_row(rows, 'Q_ASD_Lmin', 'Q_ASD_Lmin', q_asd_source, ...
+rows = add_row(rows, 'Q_ASD_Lmin', 'Q_ASD_Lmin', q_asd_clinical_field, ...
     q_asd_tier, true, include_qasd_cal, q_asd_target, 'L/min', q_asd_source, ...
     'ASD shunt-flow comparison.', ...
     'Derived Qp-Qs should not be treated as independent direct shunt flow.');
@@ -180,12 +191,61 @@ rows = add_row(rows, metric, model_field, strjoin(fields, '|'), tier, false, fal
     'Not part of primary ASD pressure-flow calibration.', notes);
 end
 
+function tier = tier_for_optional_validation(value)
+% TIER_FOR_OPTIONAL_VALIDATION - tier for derived/reported non-primary evidence.
+if isnumeric(value) && isscalar(value) && isfinite(value)
+    tier = 'validation_available_not_primary';
+else
+    tier = 'prediction_only';
+end
+end
+
+function [value, clinical_field, source] = resistance_target(src, name, source_prefix)
+% RESISTANCE_TARGET - reported or pressure-flow-derived SVR/PVR [WU].
+value = NaN;
+clinical_field = sprintf('%s_WU', upper(name));
+source = sprintf('%s %s not reported', source_prefix, upper(name));
+reported_field = sprintf('%s_WU', upper(name));
+source_field_name = sprintf('%s_WU_source', upper(name));
+if has_any(src, {reported_field})
+    value = first_numeric(src, {reported_field});
+    if isfield(src, source_field_name)
+        source = string(src.(source_field_name));
+    else
+        source = sprintf('%s %s_WU', source_prefix, upper(name));
+    end
+    return;
+end
+
+switch upper(name)
+    case 'SVR'
+        flow_Lmin = first_numeric(src, {'Qs_Lmin','CO_Lmin'});
+        if has_any(src, {'SAP_mean_mmHg'}) && has_any(src, {'RAP_mean_mmHg'}) && isfinite(flow_Lmin)
+            value = (first_numeric(src, {'SAP_mean_mmHg'}) - ...
+                first_numeric(src, {'RAP_mean_mmHg'})) / max(flow_Lmin, 1e-6);
+            clinical_field = 'SAP_mean_minus_RAP_mean_over_Qs';
+            source = 'derived_from_SAPmean_minus_RAPmean_over_Qs';
+        end
+    case 'PVR'
+        flow_Lmin = first_numeric(src, {'Qp_Lmin'});
+        if ~isfinite(flow_Lmin) && has_any(src, {'CO_Lmin'}) && has_any(src, {'QpQs'})
+            flow_Lmin = first_numeric(src, {'CO_Lmin'}) * first_numeric(src, {'QpQs'});
+        end
+        if has_any(src, {'PAP_mean_mmHg'}) && has_any(src, {'LAP_mean_mmHg'}) && isfinite(flow_Lmin)
+            value = (first_numeric(src, {'PAP_mean_mmHg'}) - ...
+                first_numeric(src, {'LAP_mean_mmHg'})) / max(flow_Lmin, 1e-6);
+            clinical_field = 'PAP_mean_minus_LAP_mean_over_Qp';
+            source = 'derived_from_PAPmean_minus_LAPmean_over_Qp';
+        end
+end
+end
+
 function rows = add_volume_function(rows, src, metric, model_field, fields, unit, source)
 % ADD_VOLUME_FUNCTION - keep volume/EF out unless case profile supports it later.
 available = has_any(src, fields);
 if available
     tier = 'validation_available_volume_function';
-    reason = 'Clinical volume/function value is available but not in Zoya primary pressure-flow tier.';
+    reason = 'Clinical volume/function value is available but not in the current primary pressure-flow tier.';
 else
     tier = 'excluded_missing_volume_function';
     reason = 'Clinical volume/function target is missing.';
@@ -260,6 +320,34 @@ function value = derived_qasd(src)
 value = NaN;
 if has_any(src, {'Qp_Lmin'}) && (has_any(src, {'Qs_Lmin'}) || has_any(src, {'CO_Lmin'}))
     value = first_numeric(src, {'Qp_Lmin'}) - first_numeric(src, {'Qs_Lmin','CO_Lmin'});
+end
+end
+
+function tf = is_direct_qasd(src)
+% IS_DIRECT_QASD - direct only when explicitly marked as independent.
+tf = false;
+if ~has_any(src, {'Q_shunt_Lmin'})
+    return;
+end
+if isfield(src, 'Q_shunt_is_direct') && islogical(src.Q_shunt_is_direct)
+    tf = src.Q_shunt_is_direct;
+    return;
+end
+if isfield(src, 'Q_shunt_source')
+    source_text = lower(char(string(src.Q_shunt_source)));
+    tf = contains(source_text, 'direct') && ~contains(source_text, 'derived');
+end
+end
+
+function value = first_finite(varargin)
+% FIRST_FINITE - first finite numeric scalar from inputs.
+value = NaN;
+for idx = 1:nargin
+    candidate = varargin{idx};
+    if isnumeric(candidate) && isscalar(candidate) && isfinite(candidate)
+        value = candidate;
+        return;
+    end
 end
 end
 

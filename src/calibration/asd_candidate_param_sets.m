@@ -13,8 +13,8 @@ function report = asd_candidate_param_sets(params0_ASD_pre, clinical_or_profile,
 %   report          - struct of candidate tables and documentation      [-]
 %
 % ASSUMPTIONS:
-%   - Current ASD orifice mode uses params.asd.Cd, so shunt severity
-%     is controlled by params.asd.Cd and fixed clinical geometry.
+%   - ASD shunt candidates are mode-aware: orifice mode uses params.asd.Cd,
+%     while linear mode uses params.R.asd.
 %   - Candidate parameters are proposed for future GSA only; they are not
 %     tuned or applied by this function.
 %
@@ -374,7 +374,8 @@ end
 function tbl = build_bounds_rationale()
 % BUILD_BOUNDS_RATIONALE - document preliminary bound policies.
 rows = {
-    "asd.Cd", "0.2 to 1.2", "Physical orifice discharge coefficient interval.", "Used only for future GSA; current value remains unchanged."
+    "asd.Cd", "0.2 to 1.2", "Physical orifice discharge coefficient interval.", "Used only when orifice mode is active."
+    "R.asd", "0.4x to 2.5x current value", "Linear ASD resistance prior around gradient/flow seed.", "Used only when linear shunt mode is active."
     "Resistances", "0.5x to 2.0x current value", "Conservative screen around seeded pediatric operating point.", "Applies to Group A vascular resistances."
     "Compliances", "0.5x to 2.0x current value", "Allows pressure waveform and reservoir sensitivity without broad free search.", "Applies to Group A and secondary venous compliances."
     "Atrial elastance", "0.5x to 2.0x current value", "ASD shunt is sensitive to atrial pressure gradient.", "Secondary because atrial volume data are absent."
@@ -415,10 +416,24 @@ rows = add_target(rows, 'SBP', 'secondary', 'SAP_sys_mmHg', src, ...
     'SAP_sys_mmHg', 'Systemic waveform target.');
 rows = add_target(rows, 'DBP', 'secondary', 'SAP_dia_mmHg', src, ...
     'SAP_dia_mmHg', 'Systemic waveform target.');
-rows = add_target(rows, 'Q_ASD', 'secondary', 'derived Qp-Qs', src, ...
-    'Qp_Lmin', 'Derived comparison only; no direct shunt flow measurement.');
-rows = add_target(rows, 'RAP_mean', 'model_prediction_only', 'RAP_mean_mmHg', ...
-    src, 'RAP_mean_mmHg', 'Clinical RAP missing; do not use as direct target.');
+qasd_priority = 'secondary';
+qasd_notes = 'Derived comparison only unless direct shunt flow is explicitly marked.';
+if has_direct_qasd(src)
+    qasd_priority = 'secondary_direct_shunt';
+    qasd_notes = 'Direct shunt flow is explicitly marked; may be reviewed as secondary calibration evidence.';
+end
+rows = add_target(rows, 'Q_ASD', qasd_priority, 'Q_ASD_source', src, ...
+    'Qp_Lmin', qasd_notes);
+rap_available = isfield(src, 'RAP_mean_mmHg') && isnumeric(src.RAP_mean_mmHg) && ...
+    isscalar(src.RAP_mean_mmHg) && isfinite(src.RAP_mean_mmHg);
+rap_priority = 'model_prediction_only';
+rap_notes = 'Clinical RAP missing; do not use as direct target.';
+if rap_available
+    rap_priority = 'primary';
+    rap_notes = 'Clinical RAP available; target-tier governance treats it as a measured atrial-pressure target.';
+end
+rows = add_target(rows, 'RAP_mean', rap_priority, 'RAP_mean_mmHg', ...
+    src, 'RAP_mean_mmHg', rap_notes);
 excluded_primary = {'LVEDV','LVESV','RVEDV','RVESV','LVEF','RVEF'};
 for idx = 1:numel(excluded_primary)
     rows = add_missing_volume_target(rows, excluded_primary{idx});
@@ -491,17 +506,24 @@ end
 
 function tbl = append_method_warnings(tbl, params, clinical, scenario, case_profile)
 % APPEND_METHOD_WARNINGS - key methodological cautions.
-if ~strcmpi(params.asd.mode, 'orifice_bidirectional')
+supported_modes = {'orifice_bidirectional','linear_bidirectional','linear_left_to_right_only'};
+if ~any(strcmpi(params.asd.mode, supported_modes))
     tbl = add_warning(tbl, 'asd.mode', 'mode_review_needed', ...
-        'Current ASD mode is not orifice_bidirectional; shunt candidate may need revision.');
+        'Current ASD mode is unsupported by the ASD candidate parameter library.');
 end
 if isfield(case_profile.dataFlags, 'has_ventricular_volume_function_targets') && ...
         ~case_profile.dataFlags.has_ventricular_volume_function_targets
     tbl = add_warning(tbl, 'ventricular_volume_targets', 'identifiability_limit', ...
         'LV/RV volume and EF targets are missing, so ventricular E/V0 remain fixed/exploratory.');
 end
-tbl = add_warning(tbl, 'RAP_mean', 'model_prediction_only', ...
-    'Clinical RAP is missing; RAP_mean should not be a direct calibration target.');
+if isfield(case_profile, 'dataFlags') && isfield(case_profile.dataFlags, 'has_rap') && ...
+        case_profile.dataFlags.has_rap
+    tbl = add_warning(tbl, 'RAP_mean', 'primary_target_available', ...
+        'Clinical RAP is available; treat as a measured atrial-pressure target in target-tier governance.');
+else
+    tbl = add_warning(tbl, 'RAP_mean', 'model_prediction_only', ...
+        'Clinical RAP is missing; RAP_mean should not be a direct calibration target.');
+end
 if isstruct(clinical) && isfield(clinical, scenario)
     src = clinical.(scenario);
     if ~(isfield(src, 'ASD_gradient_mmHg') && isfinite(src.ASD_gradient_mmHg))
@@ -515,9 +537,9 @@ function tbl = build_notes(params)
 % BUILD_NOTES - thesis-facing method notes.
 rows = {
     "No execution", "This helper defines candidate metadata only; it does not run GSA, optimisation, calibration, or ODE simulation."
-    "ASD shunt parameter", sprintf('Current mode is %s; therefore asd.Cd is the shunt candidate and R.asd is not active.', params.asd.mode)
+    "ASD shunt parameter", mode_aware_shunt_note(params)
     "Geometry", "ASD diameter and area are measured/derived clinical geometry and are held fixed for the first candidate definition."
-    "Group A", "Primary set for future GSA: vascular pressure-flow parameters plus asd.Cd."
+    "Group A", sprintf('Primary set for future GSA: vascular pressure-flow parameters plus %s.', mode_aware_shunt_name(params))
     "Group B", "Secondary set: atrial/preload candidates that may affect P_LA-P_RA and Q_ASD."
     "Group C", "Ventricular parameters are fixed/exploratory only because chamber-volume and EF targets are missing."
     };
@@ -579,6 +601,41 @@ if tf
     text = 'YES';
 else
     text = 'NO';
+end
+end
+
+function tf = has_direct_qasd(src)
+% HAS_DIRECT_QASD - true only for independent direct shunt-flow reports.
+tf = false;
+if ~isstruct(src) || ~isfield(src, 'Q_shunt_Lmin') || ...
+        ~isnumeric(src.Q_shunt_Lmin) || ~isfinite(src.Q_shunt_Lmin)
+    return;
+end
+if isfield(src, 'Q_shunt_is_direct') && islogical(src.Q_shunt_is_direct)
+    tf = src.Q_shunt_is_direct;
+    return;
+end
+if isfield(src, 'Q_shunt_source')
+    source_text = lower(char(string(src.Q_shunt_source)));
+    tf = contains(source_text, 'direct') && ~contains(source_text, 'derived');
+end
+end
+
+function name = mode_aware_shunt_name(params)
+% MODE_AWARE_SHUNT_NAME - active shunt calibration candidate.
+if strcmpi(params.asd.mode, 'orifice_bidirectional')
+    name = 'asd.Cd';
+else
+    name = 'R.asd';
+end
+end
+
+function note = mode_aware_shunt_note(params)
+% MODE_AWARE_SHUNT_NOTE - mode-aware shunt note for candidate reports.
+if strcmpi(params.asd.mode, 'orifice_bidirectional')
+    note = sprintf('Current mode is %s; therefore asd.Cd is the active shunt candidate and R.asd is inactive.', params.asd.mode);
+else
+    note = sprintf('Current mode is %s; therefore R.asd is the active shunt candidate and asd.Cd is inactive.', params.asd.mode);
 end
 end
 

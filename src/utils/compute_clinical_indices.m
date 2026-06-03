@@ -38,6 +38,8 @@ metrics.RAP_max  = max(Pc.RA);
 metrics.LAP_mean = mean_t(Pc.LA);
 metrics.LAP_min  = min(Pc.LA);
 metrics.LAP_max  = max(Pc.LA);
+metrics.DeltaP_LA_RA = metrics.LAP_mean - metrics.RAP_mean;
+metrics.DeltaP_LA_RA_mmHg = metrics.DeltaP_LA_RA;
 metrics.PWP_mean = mean_t(Pc.PVEN);
 
 metrics.PAP_min  = min(Pc.PAR);

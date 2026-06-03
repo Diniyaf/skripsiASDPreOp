@@ -144,8 +144,8 @@ rows = add_field(rows, 'common.HR', clinical.common, 'HR', 'bpm', 'clinical_over
 scenario_fields = {
     'ASD_diameter_mm', 'mm', 'parameter_seed', 'ASD geometry seed.'
     'ASD_area_mm2', 'mm^2', 'parameter_seed', 'ASD geometry seed or diameter-derived area.'
-    'ASD_gradient_mmHg', 'mmHg', 'missing_or_shunt_resistance_seed', 'Needed with direct Q_ASD to compute linear R_ASD.'
-    'Q_shunt_Lmin', 'L/min', 'direct_shunt_target_if_available', 'Direct ASD shunt flow; usually missing.'
+    'ASD_gradient_mmHg', 'mmHg', 'missing_or_shunt_resistance_seed', 'Needed with shunt-flow estimate to compute linear R_ASD.'
+    'Q_shunt_Lmin', 'L/min', 'derived_or_direct_shunt_comparison', 'ASD shunt flow; mark source explicitly as direct or Qp-Qs-derived.'
     'Qp_Lmin', 'L/min', 'primary_target', 'Pulmonary flow.'
     'Qs_Lmin', 'L/min', 'primary_target', 'Systemic flow.'
     'QpQs', '-', 'primary_target', 'Pulmonary-to-systemic flow ratio.'
@@ -228,10 +228,12 @@ flags.has_secondary_pulmonary_pressure = has_numeric(src, 'PAP_sys_mmHg') && ...
     has_numeric(src, 'PAP_dia_mmHg');
 flags.has_asd_geometry = has_numeric(src, 'ASD_diameter_mm') || has_numeric(src, 'ASD_area_mm2');
 flags.has_asd_gradient = has_numeric(src, 'ASD_gradient_mmHg');
-flags.has_direct_qasd = has_numeric(src, 'Q_shunt_Lmin');
+flags.has_qasd_comparison = has_numeric(src, 'Q_shunt_Lmin') || ...
+    (flags.has_qp && flags.has_qs);
+flags.has_direct_qasd = has_direct_qasd(src);
 flags.has_rap = has_numeric(src, 'RAP_mean_mmHg');
-flags.has_pvr = has_numeric(src, 'PVR_WU');
-flags.has_svr = has_numeric(src, 'SVR_WU');
+flags.has_pvr = has_numeric(src, 'PVR_WU') || can_derive_pvr(src);
+flags.has_svr = has_numeric(src, 'SVR_WU') || can_derive_svr(src);
 flags.has_lv_volumes = has_numeric(src, 'LVEDV_mL') && has_numeric(src, 'LVESV_mL');
 flags.has_rv_volumes = has_numeric(src, 'RVEDV_mL') && has_numeric(src, 'RVESV_mL');
 flags.has_lv_function = has_numeric(src, 'LVEF') || has_numeric(src, 'EF');
@@ -252,13 +254,38 @@ tf = isstruct(src) && isfield(src, field_name) && isnumeric(src.(field_name)) &&
     any(isfinite(src.(field_name)(:)));
 end
 
+function tf = can_derive_svr(src)
+% CAN_DERIVE_SVR - pressure-flow support for SVR estimate [WU].
+tf = has_numeric(src, 'SAP_mean_mmHg') && has_numeric(src, 'RAP_mean_mmHg') && ...
+    (has_numeric(src, 'Qs_Lmin') || has_numeric(src, 'CO_Lmin'));
+end
+
+function tf = can_derive_pvr(src)
+% CAN_DERIVE_PVR - pressure-flow support for PVR estimate [WU].
+tf = has_numeric(src, 'PAP_mean_mmHg') && has_numeric(src, 'LAP_mean_mmHg') && ...
+    (has_numeric(src, 'Qp_Lmin') || ...
+    (has_numeric(src, 'CO_Lmin') && has_numeric(src, 'QpQs')));
+end
+
 function target_policy = build_target_policy(flags, phase_label)
 % BUILD_TARGET_POLICY - target tier names used by build_asd_target_tiers.
 target_policy = struct();
 target_policy.hard_primary = {'QpQs','Qp_Lmin','Qs_Lmin','SAP_mean','PAP_mean','LAP_mean'};
 target_policy.soft_secondary_guard = {'SAP_max','SAP_min','PAP_max','PAP_min'};
-target_policy.derived_comparison = {'Q_ASD_Lmin','Q_ASD_mean_mLs','DeltaP_LA_RA'};
-target_policy.prediction_only = {'RAP_mean','SVR','PVR','LVEDV','LVESV','RVEDV','RVESV','LVEF','RVEF'};
+if flags.has_rap
+    target_policy.hard_primary{end + 1} = 'RAP_mean';
+end
+if flags.has_asd_gradient
+    target_policy.soft_secondary_guard{end + 1} = 'DeltaP_LA_RA';
+end
+target_policy.derived_comparison = {'Q_ASD_Lmin','Q_ASD_mean_mLs'};
+if ~flags.has_asd_gradient
+    target_policy.derived_comparison{end + 1} = 'DeltaP_LA_RA';
+end
+target_policy.prediction_only = {'SVR','PVR','LVEDV','LVESV','RVEDV','RVESV','LVEF','RVEF'};
+if ~flags.has_rap
+    target_policy.prediction_only = [{'RAP_mean'}, target_policy.prediction_only];
+end
 target_policy.expected_asd_direction = 'LA_to_RA';
 target_policy.expected_preclosure_qpqs_gt_one = strcmp(phase_label, 'pre_closure');
 target_policy.can_fit_direct_qasd = flags.has_direct_qasd && flags.has_asd_gradient;
@@ -341,9 +368,15 @@ end
 function tbl = build_prediction_only_outputs(flags)
 % BUILD_PREDICTION_ONLY_OUTPUTS - outputs kept for reporting/discussion.
 rows = {
-    "RAP_mean", ~flags.has_rap, "Clinical RAP missing; use as model prediction."
-    "SVR", ~flags.has_svr, "Clinical SVR missing; use as model prediction."
-    "PVR", ~flags.has_pvr, "Clinical PVR missing; use as model prediction."
+    "RAP_mean", ~flags.has_rap, ternary_text(flags.has_rap, ...
+        "Clinical RAP available; handle as measured pressure guard, not prediction-only.", ...
+        "Clinical RAP missing; use as model prediction.")
+    "SVR", ~flags.has_svr, ternary_text(flags.has_svr, ...
+        "Clinical SVR available for validation/guard review.", ...
+        "Clinical SVR missing; use as model prediction.")
+    "PVR", ~flags.has_pvr, ternary_text(flags.has_pvr, ...
+        "Clinical PVR available for validation/guard review.", ...
+        "Clinical PVR missing; use as model prediction.")
     "LVEDV/LVESV/LVEF", ~flags.has_lv_volumes && ~flags.has_lv_function, "LV volume/function targets missing."
     "RVEDV/RVESV/RVEF", ~flags.has_rv_volumes && ~flags.has_rv_function, "RV volume/function targets missing."
     };
@@ -361,11 +394,38 @@ rows = {
     "Scenario phase", string(phase_label)
     "Case classification", string(classify_mode(flags, phase_label))
     "ASD mode in params0", string(asd_mode)
-    "Direct Q_ASD", ternary_text(flags.has_direct_qasd, "available", "missing; use Qp-Qs only as derived comparison")
+    "Q_ASD source", qasd_source_note(flags)
     "ASD gradient", ternary_text(flags.has_asd_gradient, "available", "missing; cannot compute R_ASD from DeltaP/Q")
     "Volume/function targets", ternary_text(flags.has_ventricular_volume_function_targets, "available", "missing; Group C monitor-only by default")
     };
 tbl = cell2table(rows, 'VariableNames', {'Topic','Note'});
+end
+
+function tf = has_direct_qasd(src)
+% HAS_DIRECT_QASD - true only for independent direct shunt-flow reports.
+tf = false;
+if ~has_numeric(src, 'Q_shunt_Lmin')
+    return;
+end
+if isfield(src, 'Q_shunt_is_direct') && islogical(src.Q_shunt_is_direct)
+    tf = src.Q_shunt_is_direct;
+    return;
+end
+if isfield(src, 'Q_shunt_source')
+    source_text = lower(char(string(src.Q_shunt_source)));
+    tf = contains(source_text, 'direct') && ~contains(source_text, 'derived');
+end
+end
+
+function note = qasd_source_note(flags)
+% QASD_SOURCE_NOTE - describe direct vs derived shunt-flow evidence.
+if flags.has_direct_qasd
+    note = "direct Q_ASD available";
+elseif isfield(flags, 'has_qasd_comparison') && flags.has_qasd_comparison
+    note = "derived_from_Qp_minus_Qs; comparison/seed only, not direct Q_ASD";
+else
+    note = "missing; use Qp-Qs only if both flows become available";
+end
 end
 
 function text = ternary_text(tf, yes_text, no_text)

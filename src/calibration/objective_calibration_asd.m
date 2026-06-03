@@ -246,11 +246,14 @@ if ~isfinite(metrics.QpQs) || ~isfinite(metrics.Qs_Lmin) || ...
         ~isfinite(baseline.QpQs) || ~isfinite(baseline.Qs_Lmin)
     return;
 end
-% Read target QpQs from calibration config (patient-generic), not hardcoded
-target_qpqs = 3.79;  % default
+% Read target Qp/Qs from calibration config. If absent, skip the guard.
+target_qpqs = NaN;
 if isfield(calib, 'targets') && isfield(calib.targets, 'QpQs') && ...
         isfinite(calib.targets.QpQs)
     target_qpqs = calib.targets.QpQs;
+end
+if ~isfinite(target_qpqs)
+    return;
 end
 qpqs_improved = abs(metrics.QpQs - target_qpqs) < abs(baseline.QpQs - target_qpqs);
 qs_dropped = metrics.Qs_Lmin < 0.90 * baseline.Qs_Lmin;
@@ -262,8 +265,9 @@ end
 
 function J_guard = rap_physiological_guard(metrics, calib)
 % RAP_PHYSIOLOGICAL_GUARD - prevent implausible RAP predictions.
-% RAP is not a clinical target for Zoya (missing data), but implausible
-% values indicate the optimizer is fabricating a shunt gradient.
+% When RAP is not measured, implausible values still indicate the optimizer
+% is fabricating a shunt gradient. When RAP is measured, this guard remains
+% a broad physiological safety band in addition to the clinical residual.
 % Acceptable pediatric RAP range: [0, 15] mmHg.
 rap_field = 'RAP_mean';
 if ~isfield(metrics, rap_field) || ~isfinite(metrics.(rap_field))
@@ -286,7 +290,7 @@ function J_guard = systemic_pressure_band_guard(metrics, calib)
 % SYSTEMIC_PRESSURE_BAND_GUARD - asymmetric penalty when MAP leaves clinical band.
 % Soft penalty: gentle near boundaries, steep far away. This gives fmincon
 % room to explore without crossing the physiological boundary.
-% Default band: MAP in [85, 95] mmHg (tight around Zoya target of 90).
+% If calib.mapBand is absent, derive a patient-specific band from SAP_mean.
 % Set calib.mapBand = [lower, upper] to override.
 map_field = 'SAP_mean';
 if ~isfield(metrics, map_field) || ~isfinite(metrics.(map_field))
@@ -294,7 +298,7 @@ if ~isfield(metrics, map_field) || ~isfinite(metrics.(map_field))
     return;
 end
 map_value = metrics.(map_field);
-band = optional_vector(calib, 'mapBand', [85, 95]);
+band = optional_vector(calib, 'mapBand', default_map_band(calib));
 if map_value >= band(1) && map_value <= band(2)
     J_guard = 0;
     return;
@@ -305,6 +309,21 @@ else
     deviation = map_value - band(2);
 end
 J_guard = 10 * deviation^2;  % steep quadratic outside band
+end
+
+function band = default_map_band(calib)
+% DEFAULT_MAP_BAND - patient-generic MAP guard centered on clinical target.
+target = NaN;
+if isfield(calib, 'targets') && isfield(calib.targets, 'SAP_mean') && ...
+        isfinite(calib.targets.SAP_mean)
+    target = calib.targets.SAP_mean;
+end
+if isfinite(target)
+    margin = max(5, 0.10 * abs(target));
+    band = [target - margin, target + margin];
+else
+    band = [70, 100];
+end
 end
 
 function penalty = parameter_drift_penalty(x, calib)

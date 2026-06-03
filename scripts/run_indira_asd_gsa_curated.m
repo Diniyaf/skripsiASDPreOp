@@ -14,7 +14,7 @@
 %
 % WORKFLOW:
 %   adult healthy baseline
-%   -> pediatric scaling using Zoya BSA
+%   -> pediatric scaling using Indira BSA/anthropometry
 %   -> ASD clinical seeding
 %   -> curated Groups A + B + C candidate parameter library
 %   -> Saltelli/Sobol GSA
@@ -48,8 +48,9 @@ mat_path = make_unique_output_path(output_dir, ...
     sprintf('indira_asd_gsa_curated_%s.mat', timestamp));
 
 scenario = 'pre_surgery';
+patient_label = 'indira';
 seed = 42;
-N = resolve_sample_size(256);
+N = resolve_sample_size(128);
 rng(seed, 'combRecursive');
 use_parallel = resolve_parallel_mode();
 
@@ -63,7 +64,7 @@ fprintf('Execution mode: %s\n', ternary(use_parallel, ...
 
 ctx_options = struct('scaling_mode', 'lundquist_bsa', ...
     'runBaselineSimulation', false);
-ctx = run_asd_patient_case(@patient_indira, 'indira', scenario, ctx_options);
+ctx = run_asd_patient_case(@patient_indira, patient_label, scenario, ctx_options);
 clinical = ctx.clinical;
 patient = ctx.patient;
 params0_ASD_pre = ctx.params0;
@@ -88,6 +89,7 @@ all_metrics = unique([primary_metrics(:); secondary_metrics(:)], 'stable')';
 
 [saltelli, sampling_method] = build_saltelli_samples(N, d, lb, ub, seed);
 cfg = struct('scenario', scenario, 'N', N, 'seed', seed, ...
+    'patient_label', patient_label, ...
     'sampling_method', sampling_method, 'names', {names}, 'x0', x0, ...
     'lb', lb, 'ub', ub, 'primary_metrics', {primary_metrics}, ...
     'secondary_metrics', {secondary_metrics}, 'all_metrics', {all_metrics}, ...
@@ -189,7 +191,7 @@ fprintf('===============================================================\n');
 function params = apply_gsa_solver_overrides(params)
 % APPLY_GSA_SOLVER_OVERRIDES - ASD-adapted relaxed warmup for GSA screening.
 %
-% Hafiz-Keisya VSD GSA used 10 cycles with relaxed tolerances. Patient Zoya
+% Hafiz-Keisya VSD GSA used 10 cycles with relaxed tolerances. ASD
 % ASD diagnostic GSA showed frequent steady-state failures at 10 cycles, so
 % the ASD curated runner defaults to 40 cycles while preserving environment
 % overrides for smoke tests.
@@ -236,7 +238,7 @@ function use_parallel = resolve_parallel_mode()
 env_value = getenv('ASD_GSA_USE_PARALLEL');
 use_parallel = any(strcmpi(strtrim(env_value), {'1','true','yes','on'}));
 if use_parallel && license('test', 'Distrib_Computing_Toolbox') ~= 1
-    warning('run_zoya_asd_gsa_curated:noParallelToolbox', ...
+    warning('run_indira_asd_gsa_curated:noParallelToolbox', ...
         'Parallel requested but Parallel Computing Toolbox is unavailable. Falling back to serial.');
     use_parallel = false;
 end
@@ -305,7 +307,7 @@ if use_parallel
             end
         end
     catch ME
-        warning('run_zoya_asd_gsa_curated:parallelFallback', ...
+        warning('run_indira_asd_gsa_curated:parallelFallback', ...
             ['Parallel evaluation failed for %s (%s). Re-running this matrix ', ...
              'serially so the GSA does not abort.'], label, ME.message);
         Y = nan(Nlocal, n_metrics);
@@ -468,7 +470,7 @@ for idx = 1:numel(names)
         case 3
             params.(parts{1}).(parts{2}).(parts{3}) = values(idx);
         otherwise
-            error('run_zoya_asd_gsa_curated:unsupportedParameterDepth', ...
+            error('run_indira_asd_gsa_curated:unsupportedParameterDepth', ...
                 'Unsupported parameter path: %s', names{idx});
     end
 end
@@ -598,7 +600,7 @@ function tbl = matrix_table(matrix_values, names, all_metrics, selected_metrics)
 metric_names = matlab.lang.makeValidName(selected_metrics);
 [is_present, loc] = ismember(selected_metrics, all_metrics);
 if ~all(is_present)
-    error('run_zoya_asd_gsa_curated:missingMatrixMetric', ...
+    error('run_indira_asd_gsa_curated:missingMatrixMetric', ...
         'Missing sensitivity matrix metric: %s', strjoin(selected_metrics(~is_present), ', '));
 end
 tbl = array2table(matrix_values(:, loc), ...
@@ -609,9 +611,10 @@ end
 function interpretation = build_heatmap_interpretation(ST, names, primary_metrics)
 % BUILD_HEATMAP_INTERPRETATION - physiology sanity checks after full GSA.
 rows = {};
-rows = add_interpretation(rows, 'asd.Cd_shunt_effect', ...
-    sensitivity_text(ST, names, primary_metrics, 'asd.Cd', {'QpQs','Qp_Lmin'}), ...
-    'asd.Cd should affect Qp/Qs, Qp_Lmin, and Q_ASD-related behavior in orifice mode.');
+[shunt_check, shunt_param, shunt_note] = active_shunt_sanity_check(names);
+rows = add_interpretation(rows, shunt_check, ...
+    sensitivity_text(ST, names, primary_metrics, shunt_param, {'QpQs','Qp_Lmin'}), ...
+    shunt_note);
 rows = add_interpretation(rows, 'pulmonary_vascular_effect', ...
     max_family_text(ST, names, primary_metrics, {'R.PAR','R.PCOX','R.PCNO','R.PVEN','C.PAR'}, {'PAP_mean','Qp_Lmin'}), ...
     'Pulmonary vascular parameters should affect PAP_mean and pulmonary flow.');
@@ -628,6 +631,23 @@ rows = add_interpretation(rows, 'low_sensitivity_outputs', ...
     low_sensitivity_text(ST, primary_metrics), ...
     'Low sensitivity to all parameters for a primary output suggests the output is constrained by the model structure, not by a single parameter class.');
 interpretation = cell2table(rows, 'VariableNames', {'Check','Finding','Interpretation'});
+end
+
+function [check, param_name, note] = active_shunt_sanity_check(names)
+% ACTIVE_SHUNT_SANITY_CHECK - select the active shunt parameter for notes.
+if any(strcmp(names, 'R.asd'))
+    check = 'R.asd_shunt_effect';
+    param_name = 'R.asd';
+    note = 'R.asd should affect Qp/Qs, Qp_Lmin, and Q_ASD-related behavior in linear mode.';
+elseif any(strcmp(names, 'asd.Cd'))
+    check = 'asd.Cd_shunt_effect';
+    param_name = 'asd.Cd';
+    note = 'asd.Cd should affect Qp/Qs, Qp_Lmin, and Q_ASD-related behavior in orifice mode.';
+else
+    check = 'shunt_parameter_missing';
+    param_name = '';
+    note = 'No active ASD shunt parameter was present in the curated library.';
+end
 end
 
 function rows = add_interpretation(rows, check, finding, interp)
@@ -684,7 +704,7 @@ function summary = build_summary_table(cfg, sample_log, numerical_failures, phys
 % BUILD_SUMMARY_TABLE - workbook summary and reproducibility block.
 numerical_count = sum(sample_log.Numerical_Failure);
 rows = {
-    "Purpose", "Patient Zoya ASD curated-parameter pre-calibration GSA (Groups A+B+C)."
+    "Purpose", sprintf('Patient %s ASD curated-parameter pre-calibration GSA (Groups A+B+C).', cfg.patient_label)
     "No optimization", "No optimization, calibration, parameter tuning, equation edits, or post-closure logic was run."
     "Sampling method", cfg.sampling_method
     "Random seed", cfg.seed

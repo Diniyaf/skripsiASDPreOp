@@ -9,8 +9,10 @@ function params = params_from_clinical(params, clinical, scenario, reference_par
 % ASSUMPTIONS:
 %   - ASD pre_surgery and pre_closure are treated as the same phase.
 %   - Qp/Qs is stored as a clinical target, not forced as a parameter.
-%   - R_ASD is seeded from DeltaP/Q only when both are directly available.
-%   - Missing Patient Zoya PVR/SVR/volumes do not trigger inferred tuning.
+%   - R_ASD is seeded from DeltaP/Q only when a pressure gradient and
+%     shunt-flow estimate are available; direct vs Qp-Qs-derived flow is
+%     recorded explicitly in params.clinical_override.
+%   - Missing patient PVR/SVR/volumes do not trigger inferred tuning.
 %
 % SIGN CONVENTIONS:
 %   - Positive Q_ASD means left-to-right atrial shunt: LA -> RA.
@@ -62,7 +64,7 @@ else
     params.clinical_override.RVEDV_consistency_only = false;
 end
 
-if isfield(src, 'SVR_WU') && ~isnan(src.SVR_WU)
+if has_resistance_evidence(src, 'SVR')
     [SVR_target_WU, SVR_diag] = select_resistance_target(src, 'SVR');
     SVR_mech = SVR_target_WU * k;
     SVR_ref = params.R.SAR + params.R.SC + params.R.SVEN;
@@ -78,7 +80,7 @@ else
         'missing_keep_pediatric_scaled_resistance';
 end
 
-if isfield(src, 'PVR_WU') && ~isnan(src.PVR_WU)
+if has_resistance_evidence(src, 'PVR')
     [PVR_target_WU, PVR_diag] = select_resistance_target(src, 'PVR');
     PVR_mech = PVR_target_WU * k;
     R_cap_ref = 1 / max(1 / params.R.PCOX + 1 / params.R.PCNO, 1e-9);
@@ -312,10 +314,17 @@ switch phase_label
             q_shunt_mLs = abs(src.Q_shunt_Lmin) * Lmin_to_mLs; % [mL/s]
             params.R.asd = abs(src.ASD_gradient_mmHg) / max(q_shunt_mLs, 1e-9);
             params.asd.mode = 'linear_bidirectional';
-            params.asd.mapping_status = ...
-                'clinical_R_ASD_from_reported_gradient_and_direct_Q_ASD';
-            params.clinical_override.ASD_R_seed_status = ...
-                'seeded_from_ASD_gradient_over_direct_shunt_flow';
+            if is_direct_qasd_source(src)
+                params.asd.mapping_status = ...
+                    'clinical_R_ASD_from_reported_gradient_and_direct_Q_ASD';
+                params.clinical_override.ASD_R_seed_status = ...
+                    'seeded_from_ASD_gradient_over_direct_shunt_flow';
+            else
+                params.asd.mapping_status = ...
+                    'clinical_R_ASD_from_reported_gradient_and_Qp_minus_Qs';
+                params.clinical_override.ASD_R_seed_status = ...
+                    'seeded_from_ASD_gradient_over_derived_Qp_minus_Qs';
+            end
         elseif has_geometry
             params.R.asd = Inf; % [mmHg*s/mL] not used in orifice mode
             params.asd.mode = 'orifice_bidirectional';
@@ -352,6 +361,24 @@ params.clinical_override.ASD_diameter_mm = params.asd.diameter_mm; % [mm]
 params.clinical_override.ASD_area_mm2 = params.asd.area_mm2;       % [mm^2]
 params.clinical_override.ASD_mode = params.asd.mode;
 params.clinical_override.ASD_mapping_status = params.asd.mapping_status;
+end
+
+function tf = is_direct_qasd_source(src)
+% IS_DIRECT_QASD_SOURCE - identify independent shunt-flow measurements.
+tf = false;
+if ~isstruct(src) || ~isfield(src, 'Q_shunt_Lmin') || ...
+        ~isnumeric(src.Q_shunt_Lmin) || ~isscalar(src.Q_shunt_Lmin) || ...
+        ~isfinite(src.Q_shunt_Lmin)
+    return;
+end
+if isfield(src, 'Q_shunt_is_direct') && islogical(src.Q_shunt_is_direct)
+    tf = src.Q_shunt_is_direct;
+    return;
+end
+if isfield(src, 'Q_shunt_source')
+    source_text = lower(char(string(src.Q_shunt_source)));
+    tf = contains(source_text, 'direct') && ~contains(source_text, 'derived');
+end
 end
 
 function params = close_legacy_vsd(params, R_VSD_CLOSED)
@@ -420,19 +447,23 @@ switch upper(resistance_name)
         if isfield(src, 'SVR_WU')
             doc_value = src.SVR_WU;
         end
+        systemic_flow_Lmin = first_valid(src, {'Qs_Lmin', 'CO_Lmin'}, NaN);
         if isfield(src, 'SAP_mean_mmHg') && isfield(src, 'RAP_mean_mmHg') && ...
-                isfield(src, 'CO_Lmin') && all(~isnan([src.SAP_mean_mmHg src.RAP_mean_mmHg src.CO_Lmin]))
-            derived_value = (src.SAP_mean_mmHg - src.RAP_mean_mmHg) / max(src.CO_Lmin, 1e-6);
+                all(~isnan([src.SAP_mean_mmHg src.RAP_mean_mmHg systemic_flow_Lmin]))
+            derived_value = (src.SAP_mean_mmHg - src.RAP_mean_mmHg) / max(systemic_flow_Lmin, 1e-6);
         end
     case 'PVR'
         if isfield(src, 'PVR_WU')
             doc_value = src.PVR_WU;
         end
+        pulmonary_flow_Lmin = first_valid(src, {'Qp_Lmin'}, NaN);
+        if ~isfinite(pulmonary_flow_Lmin) && isfield(src, 'CO_Lmin') && ...
+                isfield(src, 'QpQs') && isfinite(src.CO_Lmin) && isfinite(src.QpQs)
+            pulmonary_flow_Lmin = src.CO_Lmin * src.QpQs;
+        end
         if isfield(src, 'PAP_mean_mmHg') && isfield(src, 'LAP_mean_mmHg') && ...
-                isfield(src, 'CO_Lmin') && isfield(src, 'QpQs') && ...
-                all(~isnan([src.PAP_mean_mmHg src.LAP_mean_mmHg src.CO_Lmin src.QpQs]))
-            Qpul_Lmin = src.CO_Lmin * src.QpQs;
-            derived_value = (src.PAP_mean_mmHg - src.LAP_mean_mmHg) / max(Qpul_Lmin, 1e-6);
+                all(~isnan([src.PAP_mean_mmHg src.LAP_mean_mmHg pulmonary_flow_Lmin]))
+            derived_value = (src.PAP_mean_mmHg - src.LAP_mean_mmHg) / max(pulmonary_flow_Lmin, 1e-6);
         end
     otherwise
         error('select_resistance_target:unknownResistance', ...
@@ -443,9 +474,13 @@ target_WU = first_non_nan(doc_value, derived_value, 1.0);
 source_name = 'fallback';
 if ~isnan(doc_value)
     source_name = 'documented';
+    source_field = sprintf('%s_WU_source', upper(resistance_name));
+    if isfield(src, source_field) && contains(lower(char(string(src.(source_field)))), 'derived')
+        source_name = 'derived_field';
+    end
 end
 if isnan(doc_value) && ~isnan(derived_value)
-    source_name = 'derived';
+    source_name = 'derived_from_available_pressure_flow_fields';
 end
 
 if strcmpi(resistance_name, 'SVR') && ~isnan(doc_value) && ~isnan(derived_value)
@@ -462,6 +497,31 @@ diag.documented_WU = doc_value;
 diag.derived_WU = derived_value;
 diag.selected_WU = target_WU;
 diag.source = source_name;
+end
+
+function tf = has_resistance_evidence(src, resistance_name)
+% HAS_RESISTANCE_EVIDENCE - true when WU is present or derivable.
+switch upper(resistance_name)
+    case 'SVR'
+        tf = has_finite_field(src, 'SVR_WU') || ...
+            (has_finite_field(src, 'SAP_mean_mmHg') && ...
+            has_finite_field(src, 'RAP_mean_mmHg') && ...
+            (has_finite_field(src, 'Qs_Lmin') || has_finite_field(src, 'CO_Lmin')));
+    case 'PVR'
+        has_qp_from_co = has_finite_field(src, 'CO_Lmin') && has_finite_field(src, 'QpQs');
+        tf = has_finite_field(src, 'PVR_WU') || ...
+            (has_finite_field(src, 'PAP_mean_mmHg') && ...
+            has_finite_field(src, 'LAP_mean_mmHg') && ...
+            (has_finite_field(src, 'Qp_Lmin') || has_qp_from_co));
+    otherwise
+        tf = false;
+end
+end
+
+function tf = has_finite_field(src, field_name)
+% HAS_FINITE_FIELD - finite scalar numeric clinical field.
+tf = isstruct(src) && isfield(src, field_name) && isnumeric(src.(field_name)) && ...
+    isscalar(src.(field_name)) && isfinite(src.(field_name));
 end
 
 function BV_patient = resolve_total_blood_volume(patient, src)
