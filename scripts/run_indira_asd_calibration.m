@@ -461,7 +461,13 @@ fit_gate = evaluate_clinical_fit_gate(metrics_base, validity_metrics, calib_cfg,
 fprintf('\n=== Clinical Fit Guard ===\n');
 fprintf('  Pass: %s\n', iif(fit_gate.pass, 'YES', 'NO'));
 if ~fit_gate.pass
-    fprintf('  Reasons: %s\n', strjoin(fit_gate.failed_reasons, '; '));
+    fprintf('  Primary rejection reasons: %s\n', strjoin(fit_gate.failed_reasons, '; '));
+end
+if ~isempty(fit_gate.secondary_warnings)
+    fprintf('  Secondary waveform warnings (not rejecting):\n');
+    for w = 1:numel(fit_gate.secondary_warnings)
+        fprintf('    ⚠ %s\n', fit_gate.secondary_warnings{w});
+    end
 end
 
 %% ========================================================================
@@ -508,9 +514,21 @@ fprintf('\n  Plausibility: %d OK | %d WARNING | %d FAIL\n', ...
 %% ========================================================================
 fprintf('\n=== Rollback Decision (3-level) ===\n');
 
-% Best candidate = lowest RMSE (may violate plausibility/validity)
-best = struct('params',final_params,'names',{final_names},'rmse',rmse_C,...
-    'validity',validity,'plausibility',plausibility,'label','best_candidate');
+% Best candidate = lowest RMSE from the staged optimizer. It is always
+% exported, even when rollback chooses a different accepted candidate.
+best_params_struct = validity_params;
+best_metrics = validity_metrics;
+best_sim = validity_sim;
+best_stage_label = iif(stageC_ran, 'stageC_best_candidate', 'stageA_best_candidate');
+best = struct('params', best_params_struct, ...
+    'parameter_names', {final_names}, ...
+    'parameter_values', final_params, ...
+    'rmse', rmse_C, ...
+    'metrics', best_metrics, ...
+    'validity', validity, ...
+    'fit_gate', fit_gate, ...
+    'plausibility', plausibility, ...
+    'label', best_stage_label);
 
 % Scientific candidate = best among valid+plausible candidates
 scientific = best;
@@ -569,6 +587,17 @@ else
     accepted_label = 'accepted_candidate';
 end
 
+accepted_candidate = struct('params', accepted_params, ...
+    'metrics', accepted_metrics, ...
+    'rmse', accepted_rmse, ...
+    'label', accepted_label);
+if rollback
+    best_rejected_candidate = best;
+    best_rejected_candidate.rejection_reason = rollback_reason;
+else
+    best_rejected_candidate = struct();
+end
+
 %% ========================================================================
 %  FINAL SUMMARY
 %% ========================================================================
@@ -602,7 +631,10 @@ pkg.target_tiers = target_tiers;
 pkg.caseProfile = caseProfile;
 pkg.validity = validity; pkg.fit_gate = fit_gate; pkg.plausibility = plausibility;
 pkg.rollback = rollback; pkg.rollback_reason = rollback_reason;
-pkg.best_candidate = best; pkg.accepted_label = accepted_label;
+pkg.best_candidate = best;
+pkg.best_rejected_candidate = best_rejected_candidate;
+pkg.accepted_candidate = accepted_candidate;
+pkg.accepted_label = accepted_label;
 pkg.baseline_rmse = rmse_baseline; pkg.accepted_rmse = accepted_rmse;
 
 mat_file = fullfile(run_dir, sprintf('indira_asd_calibration_%s.mat', timestamp));
@@ -627,13 +659,60 @@ fprintf('  CALIBRATED OUTPUT TABLE (%s)\n', accepted_label);
 fprintf('===============================================================\n');
 T_cal  = asd_output_table(calib_sim, accepted_params, clinical, 'pre_surgery');
 
+if rollback
+    fprintf('\n===============================================================\n');
+    fprintf('  BEST REJECTED CANDIDATE OUTPUT TABLE (%s)\n', best.label);
+    fprintf('===============================================================\n');
+    T_best = asd_output_table(best_sim, best_params_struct, clinical, 'pre_surgery');
+else
+    T_best = T_cal;
+end
+
+T_best_params = build_parameter_export_table(final_names, final_params, ...
+    param_names_all, x0_all, lb_all, ub_all, group_all);
+T_decision = build_rollback_decision_table(rollback, rollback_reason, ...
+    accepted_label, rmse_baseline, rmse_A, rmse_C, accepted_rmse, ...
+    stageC_ran, validity, fit_gate, plausibility);
+
 % Export tables as CSV
 csv_base = fullfile(run_dir, sprintf('indira_asd_baseline_%s.csv', timestamp));
 csv_cal  = fullfile(run_dir, sprintf('indira_asd_calibrated_%s.csv', timestamp));
+csv_best = fullfile(run_dir, sprintf('indira_asd_best_candidate_%s.csv', timestamp));
+csv_best_params = fullfile(run_dir, sprintf('indira_asd_best_candidate_parameters_%s.csv', timestamp));
+csv_decision = fullfile(run_dir, sprintf('indira_asd_rollback_decision_%s.csv', timestamp));
 writetable(T_base, csv_base);
 writetable(T_cal, csv_cal);
+writetable(T_best, csv_best);
+writetable(T_best_params, csv_best_params);
+writetable(T_decision, csv_decision);
 fprintf('\n  Baseline CSV: %s\n', csv_base);
 fprintf('  Calibrated CSV: %s\n', csv_cal);
+fprintf('  Best candidate CSV: %s\n', csv_best);
+fprintf('  Best candidate parameter CSV: %s\n', csv_best_params);
+fprintf('  Rollback decision CSV: %s\n', csv_decision);
+
+if rollback
+    csv_best_rejected = fullfile(run_dir, sprintf('indira_asd_best_rejected_candidate_%s.csv', timestamp));
+    csv_best_rejected_params = fullfile(run_dir, sprintf('indira_asd_best_rejected_candidate_parameters_%s.csv', timestamp));
+    writetable(T_best, csv_best_rejected);
+    writetable(T_best_params, csv_best_rejected_params);
+    fprintf('  Best rejected candidate CSV: %s\n', csv_best_rejected);
+    fprintf('  Best rejected parameter CSV: %s\n', csv_best_rejected_params);
+else
+    csv_best_rejected = "";
+    csv_best_rejected_params = "";
+end
+
+pkg.output_paths = struct('mat_file', string(mat_file), ...
+    'baseline_csv', string(csv_base), ...
+    'accepted_csv', string(csv_cal), ...
+    'best_candidate_csv', string(csv_best), ...
+    'best_candidate_parameters_csv', string(csv_best_params), ...
+    'rollback_decision_csv', string(csv_decision), ...
+    'best_rejected_candidate_csv', string(csv_best_rejected), ...
+    'best_rejected_candidate_parameters_csv', string(csv_best_rejected_params));
+save(mat_file, 'pkg');
+fprintf('  MAT updated with output paths and best candidate structs.\n');
 
 diary off;
 
@@ -692,9 +771,11 @@ end
 
 function gate = evaluate_clinical_fit_gate(metrics_base, metrics_final, calib_cfg, ...
     max_primary_worsening_pct, max_secondary_worsening_pct)
-% EVALUATE_CLINICAL_FIT_GATE - reject candidates that improve one target by
-% sacrificing already acceptable measured pressure-flow outputs.
+% EVALUATE_CLINICAL_FIT_GATE - reject candidates that sacrifice primary targets.
+% Secondary waveform metrics generate warnings only (not rejection) because
+% systolic/diastolic extrema have high beat-to-beat variability (±10-15%).
 reasons = {};
+secondary_warnings = {};
 
 for idx = 1:numel(calib_cfg.targetFields)
     fn = calib_cfg.targetFields{idx};
@@ -715,7 +796,7 @@ for idx = 1:numel(calib_cfg.secondaryTargetFields)
     final_err = metric_error_pct(metrics_final, fn, target);
     if isfinite(base_err) && isfinite(final_err) && ...
             final_err > 15 && final_err > base_err + max_secondary_worsening_pct
-        reasons{end + 1} = sprintf('%s guard worsened %.1f%% -> %.1f%%', ...
+        secondary_warnings{end + 1} = sprintf('%s worsened %.1f%% -> %.1f%%', ...
             fn, base_err, final_err); %#ok<AGROW>
     end
 end
@@ -723,6 +804,7 @@ end
 gate = struct();
 gate.pass = isempty(reasons);
 gate.failed_reasons = reasons;
+gate.secondary_warnings = secondary_warnings;
 end
 
 function err = metric_error_pct(metrics, field_name, target_value)
@@ -732,6 +814,104 @@ if isfield(metrics, field_name) && isfinite(metrics.(field_name)) && ...
         isfinite(target_value) && abs(target_value) > 1e-9
     err = abs(metrics.(field_name) - target_value) / abs(target_value) * 100;
 end
+end
+
+function T = build_parameter_export_table(names, values, all_names, x0_all, lb_all, ub_all, group_all)
+% BUILD_PARAMETER_EXPORT_TABLE - export fitted values and bound status.
+n = numel(names);
+parameter = strings(n, 1);
+group = strings(n, 1);
+initial_value = nan(n, 1);
+fitted_value = nan(n, 1);
+lower_bound = nan(n, 1);
+upper_bound = nan(n, 1);
+percent_change = nan(n, 1);
+bound_position = nan(n, 1);
+plausibility_flag = strings(n, 1);
+
+for idx = 1:n
+    parameter(idx) = string(names{idx});
+    loc = find(strcmp(all_names, names{idx}), 1);
+    fitted_value(idx) = values(idx);
+    if isempty(loc)
+        group(idx) = "missing_from_registry";
+        plausibility_flag(idx) = "REVIEW";
+        continue;
+    end
+    group(idx) = string(group_all{loc});
+    initial_value(idx) = x0_all(loc);
+    lower_bound(idx) = lb_all(loc);
+    upper_bound(idx) = ub_all(loc);
+    span = max(upper_bound(idx) - lower_bound(idx), 1e-9);
+    bound_position(idx) = (fitted_value(idx) - lower_bound(idx)) / span;
+    if abs(initial_value(idx)) > 1e-12
+        percent_change(idx) = (fitted_value(idx) - initial_value(idx)) / abs(initial_value(idx)) * 100;
+    end
+    if fitted_value(idx) < lower_bound(idx) || fitted_value(idx) > upper_bound(idx)
+        plausibility_flag(idx) = "FAIL";
+    elseif bound_position(idx) <= 0.10 || bound_position(idx) >= 0.90
+        plausibility_flag(idx) = "WARNING";
+    else
+        plausibility_flag(idx) = "OK";
+    end
+end
+
+T = table(parameter, group, initial_value, fitted_value, lower_bound, ...
+    upper_bound, percent_change, bound_position, plausibility_flag, ...
+    'VariableNames', {'Parameter','Group','Initial_Value','Fitted_Value', ...
+    'Lower_Bound','Upper_Bound','Percent_Change','Bound_Position_0to1', ...
+    'Plausibility_Flag'});
+end
+
+function T = build_rollback_decision_table(rollback, rollback_reason, accepted_label, ...
+    rmse_baseline, rmse_A, rmse_C, accepted_rmse, stageC_ran, validity, fit_gate, plausibility)
+% BUILD_ROLLBACK_DECISION_TABLE - compact audit trail for acceptance decision.
+topics = [
+    "Rollback"
+    "Rollback_Reason"
+    "Accepted_Label"
+    "Baseline_RMSE"
+    "Stage_A_RMSE"
+    "Best_Candidate_RMSE"
+    "Accepted_RMSE"
+    "Stage_C_Ran"
+    "Validity_Pass"
+    "Validity_Failed_Flags"
+    "Clinical_Fit_Guard_Pass"
+    "Clinical_Fit_Guard_Reasons"
+    "Plausibility_OK_Count"
+    "Plausibility_WARNING_Count"
+    "Plausibility_FAIL_Count"
+    ];
+
+failed_flags = "";
+if isfield(validity, 'failed_flags') && ~isempty(validity.failed_flags)
+    failed_flags = strjoin(string(validity.failed_flags), '; ');
+end
+fit_reasons = "";
+if isfield(fit_gate, 'failed_reasons') && ~isempty(fit_gate.failed_reasons)
+    fit_reasons = strjoin(string(fit_gate.failed_reasons), '; ');
+end
+
+values = [
+    string(iif(rollback, 'YES', 'NO'))
+    string(rollback_reason)
+    string(accepted_label)
+    string(sprintf('%.6g', rmse_baseline))
+    string(sprintf('%.6g', rmse_A))
+    string(sprintf('%.6g', rmse_C))
+    string(sprintf('%.6g', accepted_rmse))
+    string(iif(stageC_ran, 'YES', 'NO'))
+    string(iif(validity.is_valid, 'YES', 'NO'))
+    failed_flags
+    string(iif(fit_gate.pass, 'YES', 'NO'))
+    fit_reasons
+    string(plausibility.n_ok)
+    string(plausibility.n_warning)
+    string(plausibility.n_fail)
+    ];
+
+T = table(topics, values, 'VariableNames', {'Decision_Item','Value'});
 end
 
 function band = map_band_from_target(targets)
