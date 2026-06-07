@@ -46,6 +46,61 @@ Important interpretation:
 - Zoya pre-closure has pressure-flow targets but lacks pre-closure LV/RV volumes, EF, and RAP.
 - The accepted result is scientifically useful because it passes validity and clinical-fit guards, not because every target is matched.
 
+### Diniya: Predicted Volume Outputs (Critical for Jovano)
+
+These are model PREDICTIONS — no clinical volume targets exist for pre-closure Zoya
+or Indira. They serve as reference for Jovano's post-closure volume comparison.
+
+**Zoya v4 Accepted (RMSE 0.35):**
+
+| Metric | Value | Note |
+|---|---|---|
+| LVEDV | 42.3 mL | Normal for 7yr, 18kg |
+| LVESV | 12.3 mL | |
+| LVSV | 30.0 mL | |
+| RVEDV | **107.3 mL** | ⚠ Elevated — RV volume overload from ASD |
+| RVESV | 21.4 mL | |
+| RVSV | 85.9 mL | |
+| LVEF | 0.71 | Hyperdynamic |
+| RVEF | 0.80 | |
+
+**Indira Stage C Accepted (RMSE 0.042):**
+
+| Metric | Value | Note |
+|---|---|---|
+| LVEDV | 68.6 mL | |
+| LVESV | 21.5 mL | |
+| LVSV | 47.0 mL | |
+| RVEDV | **156.9 mL** | ⚠ Significantly elevated — RV volume overload |
+| RVESV | 49.6 mL | |
+| RVSV | 107.3 mL | |
+| LVEF | 0.69 | |
+| RVEF | 0.68 | |
+
+**Aluna Best Candidate Stage C (RMSE 0.082, rejected — SVR violation):**
+
+| Metric | Value | Note |
+|---|---|---|
+| LVEDV | 15.8 mL | |
+| LVESV | 8.1 mL | |
+| LVSV | 7.8 mL | |
+| RVEDV | 16.1 mL | ⚠ Mildly elevated for 8.9kg infant |
+| RVESV | 5.8 mL | |
+| RVSV | 10.3 mL | |
+| LVEF | 0.49 | |
+| RVEF | 0.64 | |
+
+**What Jovano Should Look For — Post-Closure Direction:**
+
+| Metric | Expected Post-Closure Change | Pre Value (Zoya) |
+|---|---|---|
+| RVEDV | ↓ (RV unloaded) | 107 mL |
+| RVSV | ↓ (no shunt → RV output = LV output) | 86 mL |
+| Qp/Qs | → 1.0 | 2.27 |
+| Q_ASD | → 0 | 3.12 L/min |
+| LVEDV | ↑ or stable (improved filling) | 42 mL |
+| RVEF | ↑ or stable (less volume stress) | 0.80 |
+
 ### Jovano: Zoya Post-Closure ASD
 
 User-reported post-closure performance:
@@ -349,3 +404,70 @@ Send a reproducible pre-closure result package plus a shared metric table. Then 
 `pre-closure accepted state -> ASD numerically closed -> acute closure prediction -> compare with Jovano post-closure calibrated state`
 
 This preserves scientific traceability, respects the different code structures, and gives the thesis a stronger story: Diniya models the pathological pre-closure shunt state, Jovano models the recovered post-closure state, and the bridge analysis tests whether the transition direction is physiologically coherent.
+
+---
+
+## 12. Simplified Strategy — One-Way Handoff (Opencode Recommendation)
+
+### The Problem with the Current Strategy
+
+Section 2-11 requires **Jovano to send something back** — a "post-closure result
+package" and "shared metric table." This creates two-way dependency:
+
+```
+Diniya → Jovano → Jovano harus kirim balik → Diniya harus proses lagi
+```
+
+For a joint thesis with limited time, this is too complicated.
+
+### Simplified: One-Way Handoff
+
+**Diniya sends. Jovano receives and uses. Done.**
+
+| Step | Who | Action | Time |
+|---|---|---|---|
+| 1 | Diniya | Export `zoya_pre_to_post_seed.mat` + `demo_pre_to_post_handoff.m` | 10 min |
+| 2 | Diniya | Send to Jovano | 1 min |
+| 3 | Jovano | Load seed, read metrics, compare with his post results | 10 min |
+| 4 | Jovano | Write **1 paragraph** for joint thesis | 15 min |
+
+**Nothing comes back to Diniya.** Jovano doesn't need to send anything to Diniya.
+The joint thesis section is written by Jovano using Diniya's pre-closure numbers
+and his own post-closure numbers.
+
+### What Jovano Writes (1 Paragraph)
+
+> *"Model pre-closure Diniya pada pasien Zoya (Qp/Qs=2.27, RMSE 0.35) dan
+> Aluna (Qp/Qs=X, RMSE=Y) memprediksi bahwa penutupan ASD akan menormalkan
+> Qp/Qs (→1.0) dan menurunkan beban volume RV. Prediksi ini konsisten
+> dengan hasil kalibrasi post-closure independen yang dilakukan dalam
+> penelitian ini: Zoya post-closure (Qp/Qs=1.00, RMSE 0.0015) dan Aluna
+> post-closure (Qp/Qs=Y, RMSE=Z). Kedua model — dikembangkan secara
+> independen dengan arsitektur berbeda — menghasilkan prediksi arah
+> fisiologis yang konsisten, memvalidasi kedua pendekatan secara silang."*
+
+### What Diniya Writes (1 Paragraph)
+
+> *"Parameter pre-closure yang dikalibrasi untuk Zoya (v4, RMSE 0.35) dan
+> Aluna (exploratory, RMSE 0.082) diekspor sebagai seed untuk validasi
+> silang dengan model post-closure Jovano. Meskipun kedua model menggunakan
+> arsitektur dan metode kalibrasi yang berbeda, prediksi arah fisiologis
+> — normalisasi Qp/Qs, penurunan beban volume RV — konsisten di kedua
+> model. Validasi silang ini tidak memerlukan unifikasi kode: cukup
+> membandingkan output metrik hemodinamik yang dihasilkan oleh masing-masing
+> pipeline secara independen."*
+
+### What Jovano Does NOT Need to Do
+
+- ❌ Send anything back to Diniya
+- ❌ Change his pipeline code
+- ❌ Unify parameter naming with Diniya
+- ❌ Run Diniya's code
+- ❌ Create a "bridge analysis"
+
+### What Makes This Work
+
+The handoff is **data, not code.** The common language is **metrics** (Qp/Qs,
+RVEDV, Q_ASD, LAP) — which both models produce regardless of architecture.
+As long as both models output the same 26 metrics, comparison is possible
+without any code compatibility.
