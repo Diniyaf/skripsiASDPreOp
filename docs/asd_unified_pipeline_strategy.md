@@ -379,3 +379,37 @@ terpusat + standardisasi. GSA unification bisa menyusul. Dengan 2 file terpusat
 (`run_asd_gsa.m` + `run_asd_calibration.m`), kamu sudah punya "pipeline" yang
 cukup untuk skripsi — tanpa perlu 1.459 baris `main_run.m`. Itu bisa jadi
 "future work" setelah sidang.
+
+---
+
+## 8. Implementasi 2026-06-07 - Generic Calibration Runner
+
+Sudah dibuat runner terpusat:
+
+```matlab
+run_asd_calibration(patient_fn, patient_label, scenario, options)
+```
+
+Wrapper pasien dapat menjadi tipis, misalnya:
+
+```matlab
+run_asd_calibration(@patient_aluna, 'aluna', 'pre_surgery', options);
+```
+
+### Step yang Sudah Dicakup
+
+| Step unified | Status ASD runner generic | Catatan |
+|---|---|---|
+| Validation report + rollback logic | Implemented | Hard validity gates, primary clinical fit guard, secondary warning-only guard, plausibility table, rollback decision CSV |
+| Plots | Implemented | Pressure overlay, ASD shunt/DeltaP overlay, PV-loop overlay in run-specific `figures/` folder |
+| Save artefacts | Implemented | MAT package, baseline/accepted/best-candidate CSV, validation-gate CSV, clinical-fit-gate CSV, rollback-decision CSV, run README |
+| Save calibrated params + pre-to-post seed | Implemented | Timestamped `{patient}_pre_to_post_seed_*.mat` in the calibration run folder |
+| Final GSA post-calibrasi | Postponed | Planned after accepted calibration; not run automatically |
+
+### Methodological Boundary
+
+The generic runner does not change model equations, clinical seeding,
+target-tier construction, or GSA results. It only standardizes calibration
+orchestration and post-calibration artefact export. Final post-calibration GSA
+remains a separate future step so that calibration and sensitivity verification
+stay methodologically separated.

@@ -490,3 +490,357 @@ constraint lebih lemah — hanya jika diperlukan.**
 | Penguji tanya: "Kenapa VSD punya 6?" | Tidak perlu dijawab — justifikasi internal |
 | Terkesan "mengurangi" | Terkesan "merancang tepat guna" |
 | 3 halaman penjelasan | 1 halaman penjelasan |
+
+---
+
+---
+
+# PENGELOMPOKAN CATATAN BERDASARKAN ALUR METODOLOGI BAB 3
+
+> Bagian ini mengelompokkan ulang seluruh catatan di atas ke dalam alur
+> yang direkomendasikan untuk Bab 3 (Metodologi). Tidak ada kalimat yang
+> diubah — hanya dipetakan ke sub-bab yang sesuai.
+
+---
+
+## 1.6 Pengembangan Arsitektur Lumped Parameter
+
+### 1.6.1–1.6.5 Topologi, Analogi Listrik, Time-Varying Elastance, Pembuluh Darah, Persamaan Diferensial
+
+*(Tidak tercakup dalam catatan di atas — dikembangkan dari literatur model lumped parameter)*
+
+---
+
+### 1.6.6 Pemodelan Defek Septum Atrium (ASD Shunt)
+
+**Sumber: §2 — Atrial Expansion, sub "Apa Itu Atrial Expansion"**
+
+```
+Q_ASD = Cd × A × √(2 × |P_LA − P_RA| / ρ)
+                ↑
+        Inilah yang tidak bisa dikontrol
+        oleh parameter vascular/shunt saja
+```
+
+**Sumber: §12 — Thesis Text (Metode — Mandiri, Tanpa VSD)**
+
+> *"Parameter atrium (Group B: E.LA.EB, V0.LA, V0.RA) diperlakukan secara
+> adaptif: pada pasien dengan data RAP dan ΔP yang lengkap, tekanan
+> atrium cukup di-constrain oleh data klinis sehingga parameter ini
+> tidak memerlukan kalibrasi terpisah. Pada pasien tanpa data tersebut,
+> ekspansi parameter atrium dipertimbangkan berdasarkan justifikasi
+> fisiologis — Q_ASD ∝ √(P_LA − P_RA) — sebagai perluasan Stage A,
+> bukan sebagai stage baru."*
+
+---
+
+## 1.7 Inisialisasi Parameter Model
+
+### 1.7.1 Allometric Scaling (Pediatric)
+
+*(Tidak tercakup dalam catatan di atas — dikembangkan dari metode Lundquist BSA)*
+
+---
+
+### 1.7.2 Clinical Data Seeding
+
+**Sumber: §1 — Framework Robustness, Tabel Kelas Parameter**
+
+| Kelas Parameter | Contoh | Di-constrain Oleh |
+|---|---|---|
+| Vascular + shunt | R.SAR, R.SC, R.asd | Pressure-flow (MAP, PAP, Qp, Qs, Qp/Qs) |
+| Chamber mechanics | E.LV, E.RV, V0.LV, V0.RV | Volume + EF (LVEDV, LVESV, RVEDV, RVEF) |
+| Atrial mechanics | E.LA, E.RA, V0.LA, V0.RA | Atrial pressure (LAP, RAP) |
+
+**Sumber: §6 — Paradoks Gold Standard, Bab 5**
+
+> *"Hasil dari dua pasien menunjukkan bahwa kualitas seeding —
+> yang bergantung pada kelengkapan data kateterisasi — adalah determinan
+> utama akurasi model. Temuan ini memberikan rekomendasi konkret untuk
+> pengambilan data klinis di masa depan."*
+
+---
+
+## 1.8 Simulasi Baseline
+
+*(Tidak tercakup secara eksplisit dalam catatan di atas — baseline simulation adalah langkah verifikasi konvergensi ODE dan penghitungan RMSE awal sebelum GSA dan kalibrasi)*
+
+**Keterkaitan dengan catatan §1:**
+
+Kalau semua parameter dikalibrasi sekaligus, optimizer bisa "meminjam" dari
+kelas yang tidak punya data untuk memperbaiki kelas yang punya data —
+menghasilkan solusi numerically good tapi physiologically unverifiable.
+
+*(Baseline simulation menjadi referensi RMSE awal yang digunakan pada kriteria
+rollback — lihat §4 dan §9)*
+
+---
+
+## 1.9 Global Sensitivity Analysis
+
+### 1.9.1 Metode Sobol (Monte Carlo)
+
+**Sumber: §2 — Kenapa GSA Tidak Mendeteksi Atrial Parameters**
+
+GSA mengukur sensitivitas **di sekitar baseline.** Di baseline Zoya:
+
+```
+P_LA ≈ 7, P_RA ≈ 7 → ΔP ≈ 0
+Ubah V0.LA sedikit → P_LA berubah 6.8 → 7.2
+ΔP tetap ≈ 0 → Q_ASD tidak berubah → Qp/Qs tidak berubah
+GSA: "V0.LA tidak sensitif" → ST rendah ✓ (benar, di titik INI)
+```
+
+Tapi model **perlu mencapai** LAP = 14. Di operating point itu, V0.LA akan
+SANGAT sensitif — tapi GSA tidak memprediksinya karena sampling di baseline.
+
+---
+
+### 1.9.2 Pemilihan Parameter Aktif (Optimisation Mask)
+
+**Sumber: §2 — Defense: Tidak Mengikuti GSA — Justru Kekuatan**
+
+> *"Parameter atrium (V0.LA, V0.RA, E.LA.EB) ditambahkan ke dalam set
+> kalibrasi berdasarkan justifikasi fisiologis, bukan berdasarkan hasil
+> GSA. Hal ini mencerminkan keterbatasan yang telah terdokumentasi dari
+> analisis sensitivitas berbasis varians: GSA mengukur sensitivitas lokal
+> di sekitar titik sampling (baseline), dan tidak dapat memprediksi
+> perubahan sensitivitas pada operating point yang jauh dari baseline.
+> Pada baseline Zoya, selisih tekanan atrium (ΔP_LA-RA) mendekati nol,
+> sehingga parameter atrium tampak tidak sensitif. Namun, target klinis
+> memerlukan LAP = 14 mmHg — suatu operating point di mana parameter
+> atrium diprediksi menjadi sangat berpengaruh berdasarkan hukum orifice
+> Gorlin (Q ∝ √ΔP). Ekspansi ini dilakukan secara eksplisit, dengan
+> label 'exploratory', dan didokumentasikan sebagai keputusan yang
+> diinformasikan oleh fisiologi — bukan oleh GSA. Transparansi ini
+> justru memperkuat kredibilitas metodologis: framework tidak
+> memperlakukan GSA sebagai otoritas absolut, melainkan sebagai alat
+> bantu yang hasilnya diinterpretasikan dalam konteks fisiologis."*
+
+**Sumber: §2 — Rule Generik, Bukan Hardcode Zoya**
+
+```
+Rule: "Jika Stage A gagal menaikkan LAP, cek apakah atrial parameters
+       ada di active set. Jika tidak, pertimbangkan atrial expansion."
+
+Zoya:   LAP stuck + RAP missing → EXPAND ✓
+Indira: LAP solved + RAP available → SKIP ✓
+```
+
+Rule yang sama, dua keputusan berbeda berdasarkan data — bukan nama pasien.
+
+**Sumber: §8 — Apakah Ini Terlalu Customized? (Tidak — Ini Generic)**
+
+> *"Kedua pasien ASD pre-closure dalam penelitian ini — Zoya dan Indira —
+> mewakili dua profil data klinis yang berbeda: sparse (Zoya) dan lebih
+> lengkap (Indira). Penerapan framework yang identik pada kedua pasien
+> menghasilkan keputusan kalibrasi yang berbeda — ekspansi atrial pada
+> Zoya, tanpa ekspansi pada Indira — yang seluruhnya didasarkan pada
+> kriteria objektif berbasis data, bukan pada identitas pasien. Ini
+> mendemonstrasikan bahwa framework bersifat patient-generic: responsnya
+> terhadap profil data klinis — bukan terhadap pasien tertentu."*
+
+---
+
+## 1.10 Optimasi / Kalibrasi
+
+### 1.10.1 Objective Function Multi-term
+
+**Sumber: §4 — Stage A-F, Yang Sudah Ditangani**
+
+| Kategori | Mekanisme |
+|---|---|
+| Parameter sensitif | GSA → ST ranking → active mask |
+| Mode shunt berbeda | Mode-aware detection (orifice vs linear) |
+| Data sparse | Target tiers auto-adapt |
+| Solusi spurious | Guards (MAP, RAP, ratio, shunt) + 11 validity gates |
+| Waveform degradation | Soft warning classification |
+| Starting point buruk | Staged calibration (A dulu, C conditional) |
+
+---
+
+### 1.10.2 Staged Calibration (Stage A & C)
+
+**Sumber: §1 — Kenapa Stage Diperlukan**
+
+> *"Kalibrasi dilakukan secara bertahap (staged) untuk mengatasi kompleksitas
+> ruang parameter: dengan lebih dari 20 parameter yang saling terkait dalam
+> sistem kardiovaskular tertutup, optimasi simultan seluruh parameter tidak
+> feasible secara komputasi dan berisiko menghasilkan solusi spurious. Setiap
+> stage mengkalibrasi subset parameter yang di-constrain oleh jenis data
+> klinis yang sesuai — dimulai dari parameter dengan constraint terkuat
+> (vaskular dan shunt, Stage A) hingga parameter dengan constraint terlemah
+> (ventrikel, Stage C, eksploratif)."*
+
+**Sumber: §5 — Kenapa Landscape 20-Dimensi Tidak Bisa Dieksplorasi Sekaligus**
+
+```
+20 parameter × gradient-based search:
+  → Curse of dimensionality: volume ruang pencarian eksponensial
+  → Local minima: semakin banyak dimensi, semakin banyak lembah palsu
+  → Coupling: parameter saling terkait → gradient tidak informatif
+```
+
+> *"Pendekatan staged calibration didasarkan pada prinsip bahwa tidak
+> semua parameter dalam model lumped-parameter kardiovaskular dapat
+> di-constrain secara setara oleh data klinis yang tersedia —
+> maupun dioptimasi secara simultan mengingat dimensi ruang parameter
+> yang tinggi dan kopling antar parameter yang kuat."*
+
+**Sumber: §7 — Refinement vs Missing Parameter Class**
+
+| | Refinement (Stage D/E/F) | Missing Parameter Class (Atrial Expansion) |
+|---|---|---|
+| **Masalah** | Solusi sudah ada, tapi belum optimal | **Tidak ada** parameter yang mengontrol aspek fisiologis tertentu |
+| **Yang dilakukan** | Iterasi tambahan pada parameter yang SAMA | **Menambah** parameter baru ke active set |
+| **Analoginya** | Masakan sudah enak, tinggal tambah garam sedikit | Masakan tidak ada garamnya sama sekali |
+
+**Sumber: §10 — Syarat Stage Transition**
+
+```
+Stage A: SELALU jalan (vascular + shunt)
+  → Kalibrasi parameter dengan constraint terkuat
+
+Stage B: JALAN kalau objective function TURUN dari Stage A
+  → Di ASD: SKIP — tidak ada data volume/EF
+
+Stage C: JALAN kalau ada parameter dengan ST tinggi di GSA
+  → Di ASD: JALAN kalau Group C enabled + Stage A RMSE ≥ 0.10
+
+Stage D (systemic polish): Di ASD tidak dijalankan
+Stage E (plausibility): Di ASD tidak dijalankan
+Stage F (validation): Di ASD tidak dijalankan
+```
+
+> *"Transisi antar stage kalibrasi ditentukan oleh kriteria objektif — bukan
+> urutan tetap. Stage A selalu dijalankan sebagai kalibrasi primer. Stage C
+> dijalankan secara kondisional bila Stage A gagal mencapai RMSE target.
+> Stage D, E, dan F bersifat opsional dan hanya diaktifkan bila pola
+> kegagalan spesifik terdeteksi: degradasi tekanan sistemik (D), parameter
+> di batas bound (E), atau kegagalan gate validasi (F). Pendekatan berbasis
+> kriteria ini — bukan urutan kaku — memungkinkan pipeline beradaptasi
+> terhadap profil data klinis yang berbeda antar pasien."*
+
+**Sumber: §11 — Kenapa VSD Butuh DEF — Domino Effect dari Stage B**
+
+| VSD | ASD |
+|---|---|
+| Stage B mengubah E.LV, V0.LV → systemic berubah | **Tidak ada Stage B** → systemic tidak terganggu |
+| 3+ stage → akumulasi parameter drift → bound warnings | Hanya 2 stage → pergerakan parameter minimal |
+| 17 parameter → kemungkinan gate failure lebih tinggi | 5-7 parameter → lebih sedikit interaksi tak terduga |
+
+**DEF bukan fitur yang "dihilangkan" dari ASD. DEF adalah solusi untuk masalah
+yang TIDAK TERJADI di ASD karena Stage B tidak dijalankan.**
+
+**Sumber: §12 — Framework Stage A+C — Thesis Text Mandiri**
+
+> *"Kalibrasi dilakukan dalam dua stage berdasarkan kekuatan constraint data
+> klinis terhadap masing-masing kelas parameter:*
+>
+> *Stage A — Parameter dengan constraint kuat. Parameter vaskular,
+> shunt, dan preload (Group A dan B non-ventrikel) secara langsung
+> mempengaruhi tekanan dan aliran yang terukur secara klinis: MAP, PAP,
+> Qp, Qs, Qp/Qs, LAP, dan RAP.*
+>
+> *Stage C (kondisional) — Parameter dengan constraint lemah. Parameter
+> ventrikel (E.LV.EB, E.RV.EB — Group C) mempengaruhi tekanan dan aliran
+> melalui kopling tidak langsung dalam sistem kardiovaskular tertutup.
+> Tanpa data volume ventrikel (LVEDV, LVESV, RVEDV, RVESV) dan fraksi
+> ejeksi (LVEF, RVEF), perubahan pada parameter ini tidak dapat divalidasi
+> secara independen terhadap pengukuran klinis. Oleh karena itu, Stage C
+> hanya dijalankan bila Stage A gagal mencapai RMSE target (< 0.10) —
+> dan hasilnya dilaporkan secara eksplisit sebagai eksploratif."*
+
+---
+
+### 1.10.3 Algoritma fmincon Interior-Point
+
+**Sumber: §9 — Kenapa Stage D/E/F Tidak Dijalankan di Indira**
+
+fmincon Exit=2 (StepTolerance): **tidak ada arah yang menurunkan objective
+secara bermakna.** Landscape sudah datar.
+
+```
+Stage C: J = J_primary + λ×J_secondary + guards + plausibility
+
+Kalau landscape sudah datar di Stage C:
+  → Iterasi Stage D: "tidak ada downhill direction" → hasil sama
+  → Iterasi Stage E: "tidak ada downhill direction" → hasil sama
+```
+
+---
+
+## 1.11 Evaluasi Model
+
+### 1.11.1 Validity Gates (11 Physiological Checks)
+
+**Sumber: §4 — Yang Sudah Ditangani**
+
+| Kategori | Mekanisme |
+|---|---|
+| Solusi spurious | Guards (MAP, RAP, ratio, shunt) + 11 validity gates |
+| Waveform degradation | Soft warning classification |
+
+**Sumber: §4 — Yang Belum Ditangani (Dokumentasi di Bab 5)**
+
+| Skenario | Kenapa Belum | Prioritas |
+|---|---|---|
+| Pasien dengan 3+ mode shunt berbeda | Butuh mode selection logic yang lebih canggih | Rendah — belum muncul di data |
+| Model structural limitation (atrial septal aneurysm, ventricular interdependence, respiratory variation) | 14-state tidak punya mekanisme untuk fenomena ini | Fundamental — di luar scope S1 |
+| ODE instability di region parameter ekstrem | 0.69-2.17% failure rate — acceptable | Rendah |
+
+---
+
+### 1.11.2 Rollback Logic (3-level Acceptance)
+
+**Sumber: §3 — Menguji Framework — Bukan Membangun Model**
+
+> *"Bab 4 (Hasil): Output kalibrasi + batasan yang ditemukan (GSA tidak detek
+> atrial params, LAP bottleneck, data sparse, rollback events)."*
+
+**Sumber: §4 — Kenapa Ini Bukan "Kekurangan"**
+
+> *"Framework ini mencakup mekanisme penanganan untuk failure modes yang
+> teridentifikasi dari pengalaman dua pasien ASD. Seperti semua scientific
+> software, framework dirancang untuk dapat diperluas — bukan untuk
+> mengklaim cakupan sempurna. Setiap keputusan (threshold, klasifikasi
+> tier, stage policy) bersifat eksplisit dan terdokumentasi, sehingga
+> researcher berikutnya dapat memahami, memodifikasi, atau menambah
+> stage baru tanpa membongkar arsitektur inti."*
+
+### 1.11.3 Kesalahan Relatif Rata-rata
+
+*(Dikembangkan dari literatur dan definisi RMSE pada metrik klinis)*
+
+### 1.11.4 Koefisien Korelasi Pearson (r)
+
+*(Dikembangkan dari literatur validasi model komputasional kardiovaskular)*
+
+---
+
+## Catatan Lintas Sub-bab (Untuk Bab 1 dan Bab 5)
+
+**Untuk Bab 1 — Pendahuluan (Sumber: §3 dan §6)**
+
+> *"Penelitian ini bertujuan mengembangkan dan memvalidasi framework
+> kalibrasi berbasis Global Sensitivity Analysis untuk model lumped-
+> parameter kardiovaskular pada atrial septal defect pediatrik —
+> serta mengidentifikasi batasan metodologis ketika data klinis
+> bersifat sparse."*
+
+> *"Dalam jangka panjang, model lumped-parameter yang tervalidasi berpotensi
+> mengurangi ketergantungan pada prosedur kateterisasi diagnostik — khususnya
+> untuk pasien ASD di mana keputusan klinis dapat diinformasikan oleh prediksi
+> hemodinamik non-invasif. Namun, pengembangan model tersebut memerlukan
+> data kateterisasi sebagai gold standard untuk validasi."*
+
+**Untuk Bab 5 — Kesimpulan (Sumber: §6)**
+
+> *"Ketergantungan model pada data kateterisasi untuk seeding dan kalibrasi
+> merupakan batasan yang inheren pada tahap pengembangan ini. Seperti seluruh
+> model komputasional dalam kedokteran, validasi terhadap gold standard
+> (kateterisasi) adalah prasyarat sebelum model dapat digunakan secara
+> independen. Hasil dari dua pasien menunjukkan bahwa kualitas seeding —
+> yang bergantung pada kelengkapan data kateterisasi — adalah determinan
+> utama akurasi model. Temuan ini memberikan rekomendasi konkret untuk
+> pengambilan data klinis di masa depan."*
